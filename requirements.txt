@@ -1,0 +1,8 @@
+# System/runtime prerequisites (Node packages are authoritative in package-lock.json)
+Node.js==22.x
+npm==11.x
+Google Chrome=stable
+SQLite=3.x
+Microsoft Entra app registration=Delegated Tasks.ReadWrite permission
+# Persistence uses Node's built-in node:sqlite module; no native npm addon is required.
+# Alternatively use Playwright-managed Chromium where its CDN is reachable.

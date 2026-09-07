@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+playwright-report/
+test-results/
+output/playwright/
+*.log
+*.sqlite
+*.sqlite3
+storage/*.db
+storage/*.db-*
+storage/*token-cache*.json
+storage/*token-cache*.json.*
+.DS_Store

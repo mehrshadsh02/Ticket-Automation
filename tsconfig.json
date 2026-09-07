@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "types": ["node", "@playwright/test"],
+    "outDir": "dist"
+  },
+  "include": [
+    "config/**/*.ts",
+    "models/**/*.ts",
+    "pages/**/*.ts",
+    "services/**/*.ts",
+    "storage/**/*.ts",
+    "utils/**/*.ts",
+    "tests/**/*.ts",
+    "playwright.config.ts",
+    "eslint.config.js"
+  ]
+}
