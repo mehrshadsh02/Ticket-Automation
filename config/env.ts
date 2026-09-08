@@ -18,7 +18,7 @@ const schema = z.object({
   HELPICAL_USERNAME: z.string().min(1),
   HELPICAL_PASSWORD: z.string().min(1),
   TODO_LIST_NAME: z.string().min(1).default("Helpical Tickets"),
-  POLL_INTERVAL_MINUTES: z.coerce.number().int().positive().default(5),
+  POLL_INTERVAL_MINUTES: z.coerce.number().int().positive().default(10),
   DATABASE_PATH: z.string().min(1).default("storage/helpical.sqlite3"),
   LOG_LEVEL: z.enum(logLevels).default("info"),
   MICROSOFT_CLIENT_ID: z.string().min(1),

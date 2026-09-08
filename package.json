@@ -11,7 +11,8 @@
     "test:e2e": "playwright test tests/e2e",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "sync": "tsx scripts/sync.ts"
   },
   "engines": {
     "node": ">=22.0.0"
@@ -30,6 +31,7 @@
     "globals": "17.12.0",
     "prettier": "3.9.6",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.70.0"
+    "typescript-eslint": "8.70.0",
+    "tsx": "4.19.3"
   }
 }

@@ -1,4 +1,5 @@
 import type { AppConfig } from "../config/env.js";
+import { centers } from "../config/centers.js";
 import { MicrosoftGraphAuth } from "./MicrosoftGraphAuth.js";
 import { MicrosoftGraphTodoService } from "./MicrosoftGraphTodoService.js";
 import type { TodoService } from "./TodoService.js";
@@ -11,6 +12,7 @@ export function createTodoService(config: AppConfig): TodoService {
   });
   return new MicrosoftGraphTodoService({
     todoListName: config.TODO_LIST_NAME,
+    centers,
     tokenProvider,
   });
 }

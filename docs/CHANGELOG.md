@@ -22,3 +22,7 @@
 - Added ticket/message models, Helpical page objects, and ticket collector.
 - Added DOM parsing, filtering, collector, login, and browser tests.
 - Added stable project contract and operational documentation.
+
+- Added production synchronization runner and CLI entrypoint.
+
+- Added Windows Task Scheduler operation scripts and production defaults.

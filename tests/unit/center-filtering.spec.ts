@@ -20,8 +20,8 @@ const ticket = (id: string, center: string): Ticket => ({
 
 test("collects only centers enabled in configuration", async () => {
   const centers: CenterConfig[] = [
-    { id: "enabled", name: "مرکز فعال", enabled: true },
-    { id: "disabled", name: "مرکز غیرفعال", enabled: false },
+    { id: "enabled", name: "مرکز فعال", enabled: true, todoListName: "مرکز فعال"  },
+    { id: "disabled", name: "مرکز غیرفعال", enabled: false, todoListName: "مرکز غیرفعال" },
   ];
   const opened: string[] = [];
   const collector = new TicketCollector(

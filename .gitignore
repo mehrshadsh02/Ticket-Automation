@@ -14,3 +14,8 @@ storage/*.db-*
 storage/*token-cache*.json
 storage/*token-cache*.json.*
 .DS_Store
+
+logs/
+storage/*.sqlite*
+storage/*token*.json
+storage/*cache*.json

@@ -39,7 +39,7 @@ test("enriches listed tickets with detail status and latest message", async () =
           latestMessage,
         }),
     },
-    [{ id: "configured", name: "Configured center", enabled: true }],
+    [{ id: "configured", name: "Configured center", enabled: true, todoListName: "Configured center" }],
   );
 
   const result = await collector.collect();

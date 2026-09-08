@@ -11,3 +11,5 @@
 - Microsoft To Do integration.
 - Final SQLite synchronization engine, migrations, and reconciliation policy.
 - Production scheduling, retries, observability, and deployment packaging.
+
+- Add live deployment smoke test for sync runner.

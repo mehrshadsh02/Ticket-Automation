@@ -32,3 +32,7 @@
 
 - Production polling/synchronization runner.
 - Live-tenant authenticated smoke test; it requires deployment credentials supplied outside source control.
+
+- Implemented production SyncRunner with cycle logging, per-ticket isolation, SQLite persistence, lock, and `npm run sync` entrypoint.
+
+- Finalized Windows PowerShell runner and Task Scheduler installation scripts; default polling interval is 10 minutes.

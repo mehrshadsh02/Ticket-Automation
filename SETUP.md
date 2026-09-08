@@ -44,3 +44,8 @@ npm run lint
 ```
 
 The automated suite uses isolated HTML matching Helpical's verified DOM contracts and does not require secrets. A live smoke test should be run only in a secured deployment environment.
+
+## Windows operation
+
+Run `npm run sync` for one cycle. Install recurring execution with PowerShell:
+`scripts\install-scheduler.ps1`; remove it with `scripts\uninstall-scheduler.ps1`. The interval comes from `POLL_INTERVAL_MINUTES` and defaults to 10 minutes. SQLite and token cache persist under ignored storage paths; logs are written under `logs/`.

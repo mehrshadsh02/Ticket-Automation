@@ -22,7 +22,8 @@ interface GraphTodoTask {
 }
 
 export interface MicrosoftGraphTodoServiceOptions {
-  readonly todoListName: string;
+  readonly todoListName?: string;
+  readonly centers?: readonly { name: string; todoListName: string; todoGroupName?: string }[];
   readonly tokenProvider: AccessTokenProvider;
   readonly fetch?: typeof fetch;
   readonly graphBaseUrl?: string;
@@ -41,9 +42,10 @@ export class MicrosoftGraphTodoService implements TodoService {
     ).replace(/\/$/, "");
   }
 
-  async getOrCreateTodoList(): Promise<string> {
+  async getOrCreateTodoList(center?: string): Promise<string> {
     if (this.listId) return this.listId;
-    this.listPromise ??= this.findOrCreateList();
+    const listName = this.listNameFor(center);
+    this.listPromise ??= this.findOrCreateList(listName);
     try {
       this.listId = await this.listPromise;
       return this.listId;
@@ -56,7 +58,7 @@ export class MicrosoftGraphTodoService implements TodoService {
     ticket: Ticket,
     idempotencyKey: string,
   ): Promise<TodoTaskMapping> {
-    const listId = await this.getOrCreateTodoList();
+    const listId = await this.getOrCreateTodoList(ticket.center);
     const existing = await this.findTaskByExternalId(listId, idempotencyKey);
     if (existing) return { taskId: existing.id, listId };
 
@@ -99,15 +101,20 @@ export class MicrosoftGraphTodoService implements TodoService {
     });
   }
 
-  private async findOrCreateList(): Promise<string> {
+
+  private listNameFor(center?: string): string {
+    return this.options.centers?.find((item) => item.name === center)?.todoListName ?? this.options.todoListName ?? "His Ticket";
+  }
+
+  private async findOrCreateList(listName = this.options.todoListName ?? "His Ticket"): Promise<string> {
     for await (const list of this.paginate<GraphTodoList>("/me/todo/lists")) {
-      if (list.displayName === this.options.todoListName) return list.id;
+      if (list.displayName === listName) return list.id;
     }
     const created = await this.request<GraphTodoList>(
       "/me/todo/lists",
       {
         method: "POST",
-        body: JSON.stringify({ displayName: this.options.todoListName }),
+        body: JSON.stringify({ displayName: listName }),
       },
       201,
     );
