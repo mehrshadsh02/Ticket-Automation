@@ -1,7 +1,9 @@
 import type { Locator, Page } from "@playwright/test";
 import type { Ticket } from "../models/Ticket.js";
+// import * as fs from 'fs';
+// import * as path from 'path';
 import {
-  canonicalHeader,
+  // canonicalHeader,
   normalizeDigits,
   normalizeText,
 } from "../utils/text.js";
@@ -10,34 +12,35 @@ import { resolveUrl } from "../utils/url.js";
 type TicketField = Exclude<keyof Ticket, "lastMessage" | "url">;
 
 const headerAliases: Readonly<Record<TicketField, readonly string[]>> = {
-  id: ["شناسه", "شماره", "کد", "id"],
-  title: ["عنوان", "موضوع", "عنوان تیکت"],
-  priority: ["اولویت"],
-  organization: ["سازمان", "مشتری", "شرکت"],
-  center: ["مرکز", "واحد", "مرکز درمانی"],
-  creator: ["ایجاد کننده", "ایجادکننده", "فرستنده", "ثبت کننده", "کاربر"],
-  assignee: ["مسئول", "ارجاع به", "کارشناس", "پاسخ دهنده"],
-  status: ["وضعیت"],
-  createdAt: ["تاریخ ایجاد", "ایجاد", "تاریخ ثبت"],
+  id: ['#', 'id', 'شناسه', 'کد', 'شماره'],
+  title: [
+    "دسته بندی/عنوان",
+    "دسته‌بندی/عنوان",
+    "دسته بندی",
+    "دسته‌بندی",
+    "عنوان",
+    "موضوع",
+    "عنوان تیکت",
+    "title",
+  ],
+  priority: ["اهمیت", "اولویت", "priority"],
+  organization: ["از", "سازمان", "مشتری", "شرکت"],
+  creator: ["از", "ایجاد کننده", "ایجادکننده", "فرستنده", "ثبت کننده"],
+  center: ["به", "مرکز", "واحد", "دپارتمان"],
+  assignee: ["به", "مسئول", "ارجاع به", "کارشناس"],
+  status: ["وضعیت", "status"],
+  createdAt: ["ایجاد", "تاریخ ایجاد", "تاریخ ثبت", "زمان ثبت"],
   updatedAt: [
-    "آخرین بروزرسانی",
-    "آخرین به روزرسانی",
+    "به روز رسانی",
+    "به‌روزرسانی",
+    "بروز رسانی",
     "بروزرسانی",
-    "آخرین پاسخ",
+    "آخرین بروزرسانی",
+    "آخرین به روز رسانی",
   ],
 };
 
-const requiredFields: readonly TicketField[] = [
-  "id",
-  "title",
-  "priority",
-  "center",
-  "creator",
-  "assignee",
-  "status",
-  "createdAt",
-  "updatedAt",
-];
+const requiredFields: readonly TicketField[] = ["id", "title"];
 
 export class TicketListPage {
   constructor(
@@ -45,82 +48,532 @@ export class TicketListPage {
     private readonly baseUrl: string,
   ) {}
 
-  async open(): Promise<void> {
-    await this.page.goto(new URL("tickets/", this.baseUrl).toString());
+  private get cleanBaseUrl(): string {
+    return this.baseUrl.replace(/\/+$/, "");
   }
 
-  async listTickets(): Promise<Ticket[]> {
-    const table = await this.findTicketTable();
-    const headers = await table.locator("thead th").allTextContents();
-    const columns = this.mapColumns(headers);
-    const rows = table.locator("tbody tr");
-    const tickets: Ticket[] = [];
-    const rowList = await rows.all();
+  async open(): Promise<void> {
+    if (this.isSigninUrl(this.page.url())) {
+      throw new Error(
+        `سشن Helpical معتبر نیست و مرورگر در صفحه ورود قرار دارد. URL فعلی: ${this.page.url()}`,
+      );
+    }
 
-    for (const current of rowList) {
-      const cells = await current.locator("td").allTextContents();
-      if (cells.length === 0) continue;
-      const link = current
-        .locator('a[href*="ticket"], a[href*="tickets/"]')
-        .first();
-      const href = (await link.getAttribute("href")) ?? "";
-      const value = (field: TicketField): string =>
-        normalizeText(cells[columns.get(field) ?? -1]);
-      const id = normalizeDigits(value("id")).replace(/^#/, "");
+    // 1. جستجوی دقیق لینک تیکت‌ها در نوبار یا در دکمه‌های داشبورد
+    const ticketNavSelector = [
+      '#main-navbar a[href*="tickets"]',
+      '#main-navbar a:has-text("تیکت ها")',
+      '#main-navbar a:has-text("تیکت")',
+      '#dashboard a[href*="tickets"]',
+      'a[href="tickets/"]',
+    ].join(", ");
 
-      tickets.push({
-        id,
-        title: value("title") || normalizeText(await link.textContent()),
-        priority: value("priority"),
-        organization: value("organization"),
-        center: value("center"),
-        creator: value("creator"),
-        assignee: value("assignee"),
-        status: value("status"),
-        createdAt: value("createdAt"),
-        updatedAt: value("updatedAt"),
-        url: href ? resolveUrl(href, this.baseUrl) : this.page.url(),
-        lastMessage: null,
+    const ticketNav = this.page.locator(ticketNavSelector).first();
+
+    if (await ticketNav.isVisible({ timeout: 4000 }).catch(() => false)) {
+      await Promise.all([
+        // this.page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 15_000 }).catch(() => {}),
+        ticketNav.click(),
+      ]);
+    } else {
+      // 2. اگر دکمه در دسترس نبود (یا منو باز نبود)، ناوبری مستقیم از طریق URL پایه
+      const cleanBase = this.baseUrl.replace(/\/+$/, "");
+      const ticketsUrl = cleanBase.endsWith("/dashboard")
+        ? `${cleanBase}/tickets/`
+        : `${cleanBase}/dashboard/tickets/`;
+
+      await this.page.goto(ticketsUrl, {
+        waitUntil: "domcontentloaded",
+        timeout: 30_000,
       });
     }
+
+    // انتظار برای لود شدن جدول تیکت‌ها در صفحه مقصد
+    await this.page.waitForLoadState("domcontentloaded").catch(() => {});
+  }
+
+
+  // async listTickets(): Promise<Ticket[]> {
+  //   if (this.isSigninUrl(this.page.url())) {
+  //     throw new Error(
+  //       `امکان خواندن تیکت‌ها وجود ندارد؛ مرورگر در صفحه ورود است. URL فعلی: ${this.page.url()}`,
+  //     );
+  //   }
+
+  //   const table = await this.findTicketTable();
+  //   await table.waitFor({ state: 'visible', timeout: 10000 });
+
+  //   // اطمینان از وجود ردیف‌ها در tbody (در صورت لود تدریجی/AJAX)
+  //   const rows = table.locator('tbody tr');
+  //   await rows.first().waitFor({ state: 'attached', timeout: 7000 }).catch(() => {});
+
+  //   const headers = await table
+  //     .locator('thead th, tr.tablesorter-headerRow th')
+  //     .allInnerTexts();
+
+  //   const columns = this.mapColumns(headers, true);
+  //   const rowCount = await rows.count();
+
+  //   const tickets: Ticket[] = [];
+
+  //   for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+  //     const current = rows.nth(rowIndex);
+  //     const cells = current.locator('td');
+  //     const cellCount = await cells.count();
+
+  //     if (cellCount === 0) {
+  //       continue;
+  //     }
+
+  //     const cellTexts = await cells.allInnerTexts();
+
+  //     const getCellText = (field: TicketField): string => {
+  //       const columnIndex = columns.get(field);
+
+  //       if (
+  //         columnIndex === undefined ||
+  //         columnIndex < 0 ||
+  //         columnIndex >= cellTexts.length
+  //       ) {
+  //         return '';
+  //       }
+
+  //       return normalizeText(cellTexts[columnIndex]);
+  //     };
+
+  //     /*
+  //      * استخراج شناسه (ID) و لینک تیکت:
+  //      * ۱. ابتدا بررسی تگ <a> حاوی ticket/ در تمام ردیف یا ستون ID
+  //      * ۲. در غیر این صورت، خواندن متن ستون # یا id و نرمال‌سازی ارقام فارسی
+  //      */
+  //     const ticketLink = current.locator('a[href*="ticket/"]').first();
+  //     let href = '';
+  //     let ticketId = '';
+
+  //     if ((await ticketLink.count()) > 0) {
+  //       href = (await ticketLink.getAttribute('href')) ?? '';
+  //       const rawDigitsHref = normalizeDigits(href);
+  //       const match = rawDigitsHref.match(/ticket\/(\d+)/i);
+  //       if (match?.[1]) {
+  //         ticketId = match[1];
+  //       }
+  //     }
+
+  //     // اگر از href نگرفت، از مقدار ستون شناسه برمی‌دارد
+  //     if (!ticketId) {
+  //       const rawIdText = getCellText('id');
+  //       ticketId = normalizeDigits(rawIdText).replace(/\D/g, '');
+  //     }
+
+  //     /*
+  //      * عنوان تیکت
+  //      */
+  //     let title = getCellText('title');
+  //     if (title.includes('/')) {
+  //       const titleParts = title
+  //         .split('/')
+  //         .map((part) => normalizeText(part))
+  //         .filter(Boolean);
+
+  //       const lastPart = titleParts.at(-1);
+  //       if (lastPart) {
+  //         title = lastPart;
+  //       }
+  //     }
+
+  //     /*
+  //      * ستون‌های سازمان و مرکز (تفکیک نام شخص و بخش)
+  //      */
+  //     const fromText = getCellText('organization');
+  //     const fromParts = this.splitCombinedCell(fromText);
+  //     const organization = fromParts.outer;
+  //     const creator = fromParts.inner;
+
+  //     const toText = getCellText('center');
+  //     const toParts = this.splitCombinedCell(toText);
+  //     const center = toParts.outer;
+  //     const assignee = toParts.inner;
+
+  //     const status = getCellText('status');
+  //     const priority = getCellText('priority');
+  //     const createdAt = getCellText('createdAt');
+  //     const rawUpdatedAt = getCellText('updatedAt');
+  //     const updatedAt = rawUpdatedAt === '-' ? '' : rawUpdatedAt;
+
+  //     // سطر خالی یا هدر تکراری را رد کن
+  //     if (!ticketId && !title) {
+  //       continue;
+  //     }
+
+  //     const ticketUrl = href
+  //       ? resolveUrl(href, this.page.url())
+  //       : this.page.url();
+
+  //     tickets.push({
+  //       id: ticketId || 'N/A',
+  //       title: title || 'بدون عنوان',
+  //       priority,
+  //       organization,
+  //       creator,
+  //       center,
+  //       assignee,
+  //       status,
+  //       createdAt,
+  //       updatedAt,
+  //       url: ticketUrl,
+  //       lastMessage: null,
+  //     });
+  //   }
+
+  //   return tickets;
+  // }
+
+
+  // async findTicketTable(): Promise<Locator> {
+  //   // ابتدا منتظر بارگذاری سلکتورهای معمول جدول تیکت بمان
+  //   const tableSelector = 'table.tablesorter, table.table-hover, table#ticketsTable, table';
+  //   const table = this.page.locator(tableSelector).first();
+    
+  //   await table.waitFor({ state: 'visible', timeout: 15000 });
+  //   return table;
+  // }
+
+  private async findTicketTable(): Promise<Locator> {
+    // ۱. منتظر حضور جدول در صفحه بمان
+    await this.page.waitForSelector('table', { state: 'attached', timeout: 15000 });
+
+    const tables = this.page.locator('table');
+    const tableCount = await tables.count();
+
+    // اگر فقط یک جدول در صفحه است، همان جدول تیکت‌هاست
+    if (tableCount === 1) {
+      return tables.first();
+    }
+
+    // اگر چند جدول هست، جدولی که در هدر آن کلماتی مثل "عنوان"، "شناسه"، "وضعیت" یا "#" دارد را بردار
+    for (let i = 0; i < tableCount; i++) {
+      const candidate = tables.nth(i);
+      const headerText = (await candidate.locator('thead, tr:first-child').innerText().catch(() => '')) || '';
+      if (
+        headerText.includes('عنوان') ||
+        headerText.includes('وضعیت') ||
+        headerText.includes('شناسه') ||
+        headerText.includes('#')
+      ) {
+        return candidate;
+      }
+    }
+
+    return tables.first();
+  }
+
+ async listTickets(): Promise<Ticket[]> {
+    if (this.isSigninUrl(this.page.url())) {
+      throw new Error(
+        `امکان خواندن تیکت‌ها وجود ندارد؛ مرورگر در صفحه ورود است. URL فعلی: ${this.page.url()}`,
+      );
+    }
+
+    const table = await this.findTicketTable();
+    if (!table) {
+      throw new Error('جدول تیکت‌ها در صفحه پیدا نشد');
+    }
+
+    const rows = table.locator('tbody tr');
+    // انتظار برای بارگذاری ردیف‌ها؛ در صورت عدم موفقیت، catch آن را رها می‌کند.
+    await rows.first().waitFor({ state: 'attached', timeout: 10_000 }).catch(() => {});
+    const rowCount = await rows.count();
+
+    const headers = await table
+      .locator('thead th')
+      .allInnerTexts();
+
+    const columns = this.mapColumns(headers);
+
+    // === گزارش‌های دیباگ (می‌توانید این بخش را حذف کنید) ===
+    // console.log('[DEBUG] URL:', this.page.url());
+    // console.log('[DEBUG] total <table> on page:', await this.page.locator('table').count());
+    // console.log('[DEBUG] chosen table -> class:', await table.getAttribute('class'), '| id:', await table.getAttribute('id'));
+    // console.log('[DEBUG] raw thead headers:', JSON.stringify(headers));
+    // console.log('[DEBUG] column mapping:', JSON.stringify([...columns.entries()]));
+    // console.log('[DEBUG] tbody rowCount after waitFor:', rowCount);
+    // if (rowCount > 0) {
+    //   const firstRowCells = await rows.first().locator('td').count();
+    //   console.log('[DEBUG] first row <td> count:', firstRowCells);
+    //   console.log('[DEBUG] first row text:', JSON.stringify(await rows.first().innerText()));
+    // }
+    // =======================================================
+
+    let skippedLowCells = 0;
+    let skippedNoIdentity = 0;
+
+    const tickets: Ticket[] = [];
+
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+      // اصلاح ۱: رفع اشکال تایپی و اعلان درست currentRow
+      const currentRow = rows.nth(rowIndex);
+      
+      // اصلاح ۲: اعلان صحیح و یکباره متغیر cells
+      const cells = currentRow.locator('td');
+      const cellCount = await cells.count();
+
+      if (cellCount < 4) {
+        skippedLowCells++;
+        // اصلاح ۳: حذف استفاده از cellTexts که در این بلوک تعریف نشده است.
+        console.log('[DEBUG] row', rowIndex, 'SKIPPED cellCount<4 | cells:', cellCount);
+        continue;
+      }
+
+      // اصلاح ۴: اعلان cellTexts *بعد* از بررسی cellCount و *قبل* از استفاده
+      const cellTexts = await cells.allInnerTexts();
+
+      // تابع کمکی برای استخراج متن سلول بر اساس نام ستون
+      const getCellText = (field: TicketField): string => {
+        const columnIndex = columns.get(field);
+        if (
+          columnIndex === undefined ||
+          columnIndex < 0 ||
+          columnIndex >= cellTexts.length
+        ) {
+          return '';
+        }
+        return normalizeText(cellTexts[columnIndex]);
+      };
+      
+      // ۱. استخراج شناسه تیکت (از ستون # یا لینک)
+      let ticketId = normalizeDigits(getCellText('id')).replace(/\D/g, '');
+
+      // ۲. استخراج لینک تیکت
+      const linkLocator = currentRow.locator('a[href*="ticket"]').first(); // استفاده از currentRow
+      let href = '';
+      if ((await linkLocator.count()) > 0) {
+        href = (await linkLocator.getAttribute('href')) ?? '';
+        if (!ticketId) { // اگر شناسه از ستون id نیامد، از لینک استخراج کن
+          const match = normalizeDigits(href).match(/(\d+)/);
+          if (match?.[1]) {
+            ticketId = match[1];
+          }
+        }
+      }
+
+      // ۳. عنوان تیکت (تنظیمات مربوط به "/" و برداشتن آخرین بخش)
+      const rawTitle = getCellText('title');
+      let title = rawTitle;
+      if (rawTitle.includes('/')) {
+        const titleParts = rawTitle
+          .split('/')
+          .map((part) => normalizeText(part))
+          .filter(Boolean);
+        const lastPart = titleParts.at(-1);
+        if (lastPart) {
+          title = lastPart;
+        }
+      }
+
+      // ۴. استخراج اطلاعات فرستنده و گیرنده (از ستون‌های organization و center)
+      const fromText = getCellText('organization');
+      const fromParts = this.splitCombinedCell(fromText);
+
+      const toText = getCellText('center');
+      const toParts = this.splitCombinedCell(toText);
+
+      // استخراج سایر فیلدها
+      const status = getCellText('status');
+      const priority = getCellText('priority');
+      const createdAt = getCellText('createdAt');
+      const rawUpdatedAt = getCellText('updatedAt');
+      const updatedAt = rawUpdatedAt === '-' ? '' : rawUpdatedAt; // تبدیل '-' به خالی
+
+      // شرط رد کردن ردیف: اگر نه شناسه و نه عنوان معتبر داشته باشد
+      if (!ticketId && !title) {
+          skippedNoIdentity++;
+          console.log('[DEBUG] row', rowIndex, 'SKIPPED no-id&no-title | cells:', JSON.stringify(cellTexts));
+          continue;
+      }
+
+      // ساخت URL نهایی تیکت
+      const ticketUrl = href ? resolveUrl(href, this.page.url()) : this.page.url();
+
+      // اضافه کردن تیکت استخراج شده به لیست
+      tickets.push({
+        id: ticketId || `ROW-${rowIndex + 1}`, // استفاده از ID استخراج شده یا شماره ردیف به عنوان fallback
+        title: title || 'بدون عنوان',          // استفاده از عنوان استخراج شده یا "بدون عنوان"
+        priority,
+        organization: fromParts.outer,
+        creator: fromParts.inner,
+        center: toParts.outer,
+        assignee: toParts.inner,
+        status,
+        createdAt,
+        updatedAt,
+        url: ticketUrl,
+        lastMessage: null, // مقداردهی اولیه برای lastMessage
+      });
+    }
+
+    // گزارش نهایی تعداد ردیف‌های skip شده و تعداد تیکت‌های نهایی
+    console.log('[DEBUG] skipped (cellCount<4):', skippedLowCells, '| skipped (no id/title):', skippedNoIdentity);
+    console.log('[DEBUG] final tickets.length:', tickets.length);
+    console.log('[DEBUG] <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<');
+
     return tickets;
   }
 
-  private async findTicketTable(): Promise<Locator> {
-    const tables = this.page.locator("table");
-    for (const candidate of await tables.all()) {
-      const headers = await candidate.locator("thead th").allTextContents();
-      const mapped = this.mapColumns(headers, false);
-      if (requiredFields.every((field) => mapped.has(field))) return candidate;
+
+  // private mapColumns(
+  //   headers: string[],
+  //   strict = false,
+  // ): Map<TicketField, number> {
+  //   const result = new Map<TicketField, number>();
+
+  //   headers.forEach((header, index) => {
+  //     const rawTrimmed = (header ?? "").trim();
+  //     const normalizedHeader = canonicalHeader(rawTrimmed);
+
+  //     // ۱. تطبیق مستقیم هدرهای خاص مانند '#' یا 'id' قبل از حذف سمبل‌ها
+  //     if (rawTrimmed === '#' || rawTrimmed.toLowerCase() === 'id') {
+  //       result.set('id' , index);
+  //       return;
+  //     }
+
+  //     /*
+  //      * بسیار مهم:
+  //      * ستون noExl هدر خالی دارد. مقدار خالی نباید با aliasها مقایسه شود.
+  //      */
+  //     if (!normalizedHeader) {
+  //       return;
+  //     }
+
+  //     // ۲. تطبیق بر اساس Aliasها
+  //     for (const [field, aliases] of Object.entries(headerAliases) as [
+  //       TicketField,
+  //       readonly string[],
+  //     ][]) {
+  //       const matched = aliases.some((alias) => {
+  //         const rawAlias = alias.trim();
+  //         const normalizedAlias = canonicalHeader(rawAlias);
+
+  //         // بررسی هم به صورت متن خام، هم متن نرمال‌شده
+  //         if (rawTrimmed === rawAlias || rawTrimmed.toLowerCase() === rawAlias.toLowerCase()) {
+  //           return true;
+  //         }
+
+  //         if (!normalizedAlias) {
+  //           return false;
+  //         }
+
+  //         return (
+  //           normalizedHeader === normalizedAlias ||
+  //           normalizedHeader.includes(normalizedAlias) ||
+  //           normalizedAlias.includes(normalizedHeader)
+  //         );
+  //       });
+
+  //       if (matched && !result.has(field)) {
+  //         result.set(field, index);
+  //       }
+  //     }
+  //   });
+
+  //   if (strict) {
+  //     const missingFields = requiredFields.filter(
+  //       (field) => !result.has(field),
+  //     );
+
+  //     if (missingFields.length > 0) {
+  //       throw new Error(
+  //         `ستون‌های ضروری جدول پیدا نشدند: ${missingFields.join(", ")}. ` +
+  //           `هدرهای موجود: ${headers
+  //             .map((header) => (header ?? "").trim())
+  //             .filter(Boolean)
+  //             .join(" | ")}`,
+  //       );
+  //     }
+  //   }
+
+  //   return result;
+  // }
+
+  mapColumns(headers: string[]): Map<TicketField, number> {
+  const mapping = new Map<TicketField, number>();
+
+  headers.forEach((header, index) => {
+    // 1. نرمال‌سازی دقیق متن هدر
+    const clean = header.trim();
+    
+    // 2. اولویت اول: ستون‌های حساس و طولانی‌تر (ابتدا باید چک شوند)
+    if (clean === 'به روز رسانی' || clean === 'به‌روزرسانی' || clean === 'بروز رسانی' || clean === 'بروزرسانی') {
+      mapping.set('updatedAt', index);
+    } 
+    // 3. تطبیق دقیق ستون‌های "از" و "به"
+    else if (clean === 'از') {
+      mapping.set('organization', index);
+    } 
+    else if (clean === 'به') {
+      mapping.set('center', index);
     }
-    throw new Error(
-      "Could not find a Helpical ticket table with the required headers",
-    );
+    // 4. سایر ستون‌ها
+    else if (clean === '#') {
+      mapping.set('id', index);
+    } 
+    else if (clean.includes('عنوان') || clean.includes('دسته')) {
+      mapping.set('title', index);
+    } 
+    else if (clean.includes('وضعیت')) {
+      mapping.set('status', index);
+    } 
+    else if (clean.includes('ایجاد')) {
+      mapping.set('createdAt', index);
+    }
+    else if (clean.includes('اهمیت') || clean.includes('اولویت')) {
+      mapping.set('priority', index);
+    }
+  });
+
+  // لاگ برای اطمینان از صحت نگاشت
+  console.log('[DEBUG] column mapping result:', Object.fromEntries(mapping));
+  
+  return mapping;
+}
+
+
+  private splitCombinedCell(value: string): {
+    outer: string;
+    inner: string;
+  } {
+    const normalizedValue = normalizeText(value);
+
+    if (!normalizedValue) {
+      return {
+        outer: "",
+        inner: "",
+      };
+    }
+
+    const match = normalizedValue.match(/^(.+?)\s*[(（]\s*(.+?)\s*[)）]\s*$/);
+
+    if (!match) {
+      return {
+        outer: normalizedValue,
+        inner: "",
+      };
+    }
+
+    return {
+      outer: normalizeText(match[1]),
+      inner: normalizeText(match[2]),
+    };
   }
 
-  private mapColumns(
-    headers: string[],
-    strict = true,
-  ): Map<TicketField, number> {
-    const result = new Map<TicketField, number>();
-    headers.forEach((header, index) => {
-      const normalized = canonicalHeader(header);
-      for (const [field, aliases] of Object.entries(headerAliases) as [
-        TicketField,
-        readonly string[],
-      ][]) {
-        if (aliases.some((alias) => normalized === canonicalHeader(alias))) {
-          if (!result.has(field)) result.set(field, index);
-        }
-      }
-    });
-    if (strict) {
-      const missing = requiredFields.filter((field) => !result.has(field));
-      if (missing.length > 0)
-        throw new Error(
-          `Ticket table is missing required columns: ${missing.join(", ")}`,
-        );
+  private isSigninUrl(value: string): boolean {
+    try {
+      return new URL(value).pathname.includes("/signin");
+    } catch {
+      return value.includes("/signin");
     }
-    return result;
+  }
+
+  private ensureTrailingSlash(value: string): string {
+    return value.endsWith("/") ? value : `${value}/`;
   }
 }

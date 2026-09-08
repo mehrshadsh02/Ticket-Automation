@@ -1,0 +1,28 @@
+{
+  "currentUrl": "https://ticket.epdsupport.ir/tickets/",
+  "documentTitle": "سیستم تیکتینگ و پشتیبانی آنلاین",
+  "bodyTextSnippet": "\nدشبورد\n\nتیکت ها\n\nپایگاه دانش\n\nتنظیمات\n\nخروج\n\n\n لیست تیکت ها\nتیکت جدید\n‹\n۱\n۲\n۳\n›\n\t\n#\n\t\nاهمیت\n\t\nدسته بندی/عنوان\n\t\nاز\n\t\nبه\n\t\nوضعیت\n\t\nرضایتمندی\n\t\nایجاد\n\t\nبه روز رسانی\n\t\nمدت زمان بسته شدن\n\n\t۶۲۴۴۹\tبحرانی\t صندوق ، حسابداری و بیمه گری / عدم تعلق ارز نهاده های دامی\tدانشکده علوم پزشکی تربت جام (خانم اسما درپ",
+  "tableCount": 1,
+  "tablesSummary": [
+    {
+      "index": 0,
+      "id": "",
+      "className": "table table-hover table-striped table-responsive tablesorter tablesorter-default",
+      "thTexts": [
+        "",
+        "#",
+        "اهمیت",
+        "دسته بندی/عنوان",
+        "از",
+        "به",
+        "وضعیت",
+        "رضایتمندی",
+        "ایجاد",
+        "به روز رسانی",
+        "مدت زمان بسته شدن"
+      ],
+      "rowCount": 101,
+      "tbodyRowCount": 100
+    }
+  ]
+}
