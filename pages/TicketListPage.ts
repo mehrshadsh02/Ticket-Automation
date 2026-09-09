@@ -1,5 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import type { Ticket } from "../models/Ticket.js";
+import { centers } from "../config/centers.js";
 // import * as fs from 'fs';
 // import * as path from 'path';
 import {
@@ -52,6 +53,10 @@ export class TicketListPage {
     return this.baseUrl.replace(/\/+$/, "");
   }
 
+  private readonly configuredCenters = centers.map(
+    ({ name }) => normalizeText(name),
+  );
+
   async open(): Promise<void> {
     if (this.isSigninUrl(this.page.url())) {
       throw new Error(
@@ -92,152 +97,6 @@ export class TicketListPage {
     await this.page.waitForLoadState("domcontentloaded").catch(() => {});
   }
 
-
-  // async listTickets(): Promise<Ticket[]> {
-  //   if (this.isSigninUrl(this.page.url())) {
-  //     throw new Error(
-  //       `امکان خواندن تیکت‌ها وجود ندارد؛ مرورگر در صفحه ورود است. URL فعلی: ${this.page.url()}`,
-  //     );
-  //   }
-
-  //   const table = await this.findTicketTable();
-  //   await table.waitFor({ state: 'visible', timeout: 10000 });
-
-  //   // اطمینان از وجود ردیف‌ها در tbody (در صورت لود تدریجی/AJAX)
-  //   const rows = table.locator('tbody tr');
-  //   await rows.first().waitFor({ state: 'attached', timeout: 7000 }).catch(() => {});
-
-  //   const headers = await table
-  //     .locator('thead th, tr.tablesorter-headerRow th')
-  //     .allInnerTexts();
-
-  //   const columns = this.mapColumns(headers, true);
-  //   const rowCount = await rows.count();
-
-  //   const tickets: Ticket[] = [];
-
-  //   for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-  //     const current = rows.nth(rowIndex);
-  //     const cells = current.locator('td');
-  //     const cellCount = await cells.count();
-
-  //     if (cellCount === 0) {
-  //       continue;
-  //     }
-
-  //     const cellTexts = await cells.allInnerTexts();
-
-  //     const getCellText = (field: TicketField): string => {
-  //       const columnIndex = columns.get(field);
-
-  //       if (
-  //         columnIndex === undefined ||
-  //         columnIndex < 0 ||
-  //         columnIndex >= cellTexts.length
-  //       ) {
-  //         return '';
-  //       }
-
-  //       return normalizeText(cellTexts[columnIndex]);
-  //     };
-
-  //     /*
-  //      * استخراج شناسه (ID) و لینک تیکت:
-  //      * ۱. ابتدا بررسی تگ <a> حاوی ticket/ در تمام ردیف یا ستون ID
-  //      * ۲. در غیر این صورت، خواندن متن ستون # یا id و نرمال‌سازی ارقام فارسی
-  //      */
-  //     const ticketLink = current.locator('a[href*="ticket/"]').first();
-  //     let href = '';
-  //     let ticketId = '';
-
-  //     if ((await ticketLink.count()) > 0) {
-  //       href = (await ticketLink.getAttribute('href')) ?? '';
-  //       const rawDigitsHref = normalizeDigits(href);
-  //       const match = rawDigitsHref.match(/ticket\/(\d+)/i);
-  //       if (match?.[1]) {
-  //         ticketId = match[1];
-  //       }
-  //     }
-
-  //     // اگر از href نگرفت، از مقدار ستون شناسه برمی‌دارد
-  //     if (!ticketId) {
-  //       const rawIdText = getCellText('id');
-  //       ticketId = normalizeDigits(rawIdText).replace(/\D/g, '');
-  //     }
-
-  //     /*
-  //      * عنوان تیکت
-  //      */
-  //     let title = getCellText('title');
-  //     if (title.includes('/')) {
-  //       const titleParts = title
-  //         .split('/')
-  //         .map((part) => normalizeText(part))
-  //         .filter(Boolean);
-
-  //       const lastPart = titleParts.at(-1);
-  //       if (lastPart) {
-  //         title = lastPart;
-  //       }
-  //     }
-
-  //     /*
-  //      * ستون‌های سازمان و مرکز (تفکیک نام شخص و بخش)
-  //      */
-  //     const fromText = getCellText('organization');
-  //     const fromParts = this.splitCombinedCell(fromText);
-  //     const organization = fromParts.outer;
-  //     const creator = fromParts.inner;
-
-  //     const toText = getCellText('center');
-  //     const toParts = this.splitCombinedCell(toText);
-  //     const center = toParts.outer;
-  //     const assignee = toParts.inner;
-
-  //     const status = getCellText('status');
-  //     const priority = getCellText('priority');
-  //     const createdAt = getCellText('createdAt');
-  //     const rawUpdatedAt = getCellText('updatedAt');
-  //     const updatedAt = rawUpdatedAt === '-' ? '' : rawUpdatedAt;
-
-  //     // سطر خالی یا هدر تکراری را رد کن
-  //     if (!ticketId && !title) {
-  //       continue;
-  //     }
-
-  //     const ticketUrl = href
-  //       ? resolveUrl(href, this.page.url())
-  //       : this.page.url();
-
-  //     tickets.push({
-  //       id: ticketId || 'N/A',
-  //       title: title || 'بدون عنوان',
-  //       priority,
-  //       organization,
-  //       creator,
-  //       center,
-  //       assignee,
-  //       status,
-  //       createdAt,
-  //       updatedAt,
-  //       url: ticketUrl,
-  //       lastMessage: null,
-  //     });
-  //   }
-
-  //   return tickets;
-  // }
-
-
-  // async findTicketTable(): Promise<Locator> {
-  //   // ابتدا منتظر بارگذاری سلکتورهای معمول جدول تیکت بمان
-  //   const tableSelector = 'table.tablesorter, table.table-hover, table#ticketsTable, table';
-  //   const table = this.page.locator(tableSelector).first();
-    
-  //   await table.waitFor({ state: 'visible', timeout: 15000 });
-  //   return table;
-  // }
-
   private async findTicketTable(): Promise<Locator> {
     // ۱. منتظر حضور جدول در صفحه بمان
     await this.page.waitForSelector('table', { state: 'attached', timeout: 15000 });
@@ -265,6 +124,56 @@ export class TicketListPage {
     }
 
     return tables.first();
+  }
+
+  private async extractFromCell(cell: Locator): Promise<{
+    organization: string;
+    creator: string;
+    center: string;
+  }> {
+    const fullText = normalizeText(await cell.innerText());
+
+    const small = cell.locator("small").first();
+
+    if ((await small.count()) === 0) {
+      return {
+        organization: fullText,
+        creator: "",
+        center: "",
+      };
+    }
+
+    const smallText = normalizeText(await small.innerText());
+
+    const organization = normalizeText(
+      fullText.replace(smallText, ""),
+    );
+
+    const inner = normalizeText(
+      smallText.replace(/^[\(（]\s*|\s*[)）]$/g, ""),
+    );
+
+    const center = this.configuredCenters
+      .sort((a, b) => b.length - a.length)
+      .find((name) => inner.includes(name)) ?? "";
+
+    if (!center) {
+      return {
+        organization,
+        creator: inner,
+        center: "",
+      };
+    }
+
+    const creator = normalizeText(
+      inner.replace(center, ""),
+    );
+
+    return {
+      organization,
+      creator,
+      center,
+    };
   }
 
  async listTickets(): Promise<Ticket[]> {
@@ -370,12 +279,35 @@ export class TicketListPage {
         }
       }
 
-      // ۴. استخراج اطلاعات فرستنده و گیرنده (از ستون‌های organization و center)
-      const fromText = getCellText('organization');
-      const fromParts = this.splitCombinedCell(fromText);
+      const organizationIndex = columns.get("organization");
+      const centerIndex = columns.get("center");
 
-      const toText = getCellText('center');
-      const toParts = this.splitCombinedCell(toText);
+      if (
+        organizationIndex === undefined ||
+        centerIndex === undefined
+      ) {
+        console.log(
+          "[DEBUG] organization/center column not found",
+        );
+        continue;
+      }
+
+      const fromCell = cells.nth(organizationIndex);
+      const toCell = cells.nth(centerIndex);
+
+      const fromParts = await this.extractFromCell(fromCell);
+
+      const toSmall = toCell.locator("small").first();
+
+      let assignee = "";
+
+      if ((await toSmall.count()) > 0) {
+        const rawAssignee = normalizeText(await toSmall.innerText());
+
+        assignee = normalizeText(
+          rawAssignee.replace(/^[\(（]\s*|\s*[)）]$/g, ""),
+        );
+      }
 
       // استخراج سایر فیلدها
       const status = getCellText('status');
@@ -392,17 +324,20 @@ export class TicketListPage {
       }
 
       // ساخت URL نهایی تیکت
-      const ticketUrl = href ? resolveUrl(href, this.page.url()) : this.page.url();
+      const ticketUrl = new URL(
+        `/ticket/${ticketId}/`,
+        this.page.url(),
+      ).toString();
 
       // اضافه کردن تیکت استخراج شده به لیست
       tickets.push({
         id: ticketId || `ROW-${rowIndex + 1}`, // استفاده از ID استخراج شده یا شماره ردیف به عنوان fallback
         title: title || 'بدون عنوان',          // استفاده از عنوان استخراج شده یا "بدون عنوان"
         priority,
-        organization: fromParts.outer,
-        creator: fromParts.inner,
-        center: toParts.outer,
-        assignee: toParts.inner,
+        organization: fromParts.organization,
+        creator: fromParts.creator,
+        center: fromParts.center,
+        assignee,
         status,
         createdAt,
         updatedAt,
