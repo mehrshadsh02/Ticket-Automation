@@ -31,7 +31,7 @@ export async function runSync(config: AppConfig): Promise<void> {
   try {
     browser = await chromium.launch({
       channel: 'chrome',
-      headless: false,
+      headless: true,
       slowMo: 500,
     });
     const page = await browser.newPage();

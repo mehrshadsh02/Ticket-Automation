@@ -35,20 +35,14 @@ export class TicketCollector {
   }
 
   private isCenterEnabled(center: string): boolean {
-    if (this.enabledCenterNames.size === 0) {
-      return false;
-    }
+    if (this.enabledCenterNames.size === 0) return false;
 
     const normalized = normalizeCenterName(center);
 
-    // مرکز خالی هرگز نباید انتخاب شود
-    if (!normalized) {
-      return false;
-    }
+    // مرکز خالی نباید انتخاب شود
+    if (!normalized) return false;
 
-    if (this.enabledCenterNames.has(normalized)) {
-      return true;
-    }
+    if (this.enabledCenterNames.has(normalized)) return true;
 
     for (const enabledName of this.enabledCenterNames) {
       if (
