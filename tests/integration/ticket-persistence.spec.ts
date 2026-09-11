@@ -10,6 +10,15 @@ import type {
   TodoTaskMapping,
 } from "../../services/TodoService.js";
 import { TicketRepository } from "../../storage/TicketRepository.js";
+import type { CenterConfig } from "../../models/CenterConfig.js";
+
+const testCenter: CenterConfig = {
+  id: "test-center",
+  name: "مرکز تست",
+  adminName: "کاربر",
+  enabled: true,
+  todoListName: "تست",
+};
 
 class FakeTodoService implements TodoService {
   readonly calls: string[] = [];
@@ -79,7 +88,7 @@ const makeTicket = (overrides: Partial<Ticket> = {}): Ticket => ({
 
 test.beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), "helpical-storage-"));
-  repository = new TicketRepository(join(directory, "tickets.sqlite3"));
+  repository = new TicketRepository(join(directory, "tickets.sqlite3"), [testCenter]);
   todo = new FakeTodoService();
   processor = new TicketProcessor(
     repository,
@@ -214,7 +223,7 @@ test("restart preserves ticket state and mapping", async () => {
   await processor.process(ticket);
   repository.close();
 
-  repository = new TicketRepository(databasePath);
+  repository = new TicketRepository(databasePath, [testCenter]);
   processor = new TicketProcessor(
     repository,
     todo,

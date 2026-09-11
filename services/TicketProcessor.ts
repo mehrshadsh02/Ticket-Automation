@@ -25,6 +25,7 @@ export class TicketProcessor {
   async process(ticket: Ticket): Promise<ProcessingResult> {
     const previous = this.repository.findById(ticket.id);
     if (!previous) return this.processNew(ticket);
+    this.repository.insertDetailsForTicket(ticket);
     if (!this.mappingFor(previous))
       return this.attachMissingMapping(ticket, previous);
     if (!this.hasChanged(previous, ticket)) {
@@ -94,9 +95,8 @@ export class TicketProcessor {
       stored.createdAt !== incoming.createdAt ||
       stored.updatedAt !== incoming.updatedAt ||
       stored.url !== incoming.url ||
-      stored.lastMessageAuthor !== (incoming.lastMessage?.author ?? null) ||
-      stored.lastMessageDate !== (incoming.lastMessage?.date ?? null) ||
-      stored.lastMessageText !== (incoming.lastMessage?.text ?? null)
+      stored.priorityCode !== (incoming.priorityCode ?? stored.priorityCode) ||
+      stored.statusCode !== (incoming.statusCode ?? stored.statusCode)
     );
   }
 

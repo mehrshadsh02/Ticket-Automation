@@ -10,7 +10,7 @@ import {
 } from "../utils/text.js";
 import { resolveUrl } from "../utils/url.js";
 
-type TicketField = Exclude<keyof Ticket, "lastMessage" | "url">;
+type TicketField = "id" | "title" | "priority" | "organization" | "creator" | "center" | "assignee" | "status" | "createdAt" | "updatedAt";
 
 const headerAliases: Readonly<Record<TicketField, readonly string[]>> = {
   id: ['#', 'id', 'شناسه', 'کد', 'شماره'],

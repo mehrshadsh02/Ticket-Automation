@@ -7,6 +7,9 @@ import { MicrosoftGraphTodoService } from "../../services/MicrosoftGraphTodoServ
 import { StateMachine } from "../../services/StateMachine.js";
 import { TicketProcessor } from "../../services/TicketProcessor.js";
 import { TicketRepository } from "../../storage/TicketRepository.js";
+import type { CenterConfig } from "../../models/CenterConfig.js";
+
+const testCenter: CenterConfig = { id: "test-center", name: "مرکز تست", adminName: "کاربر", enabled: true, todoListName: "تست" };
 
 const baseTicket: Ticket = {
   id: "2001",
@@ -65,7 +68,7 @@ test("processor persists real Graph mapping and reopens it after restart", async
     fetch: mockFetch,
     graphBaseUrl: "https://graph.test/v1.0",
   });
-  let repository = new TicketRepository(path);
+  let repository = new TicketRepository(path, [testCenter]);
   let processor = new TicketProcessor(
     repository,
     graph,
@@ -81,7 +84,7 @@ test("processor persists real Graph mapping and reopens it after restart", async
     });
     repository.close();
 
-    repository = new TicketRepository(path);
+    repository = new TicketRepository(path, [testCenter]);
     processor = new TicketProcessor(
       repository,
       graph,
@@ -113,7 +116,7 @@ test("processor persists real Graph mapping and reopens it after restart", async
 
 test("Graph create failure saves neither a fake task mapping nor a sync checkpoint and retries", async () => {
   const directory = await mkdtemp(join(tmpdir(), "helpical-graph-failure-"));
-  const repository = new TicketRepository(join(directory, "tickets.sqlite3"));
+  const repository = new TicketRepository(join(directory, "tickets.sqlite3"), [testCenter]);
   const responses = [
     {
       status: 200,

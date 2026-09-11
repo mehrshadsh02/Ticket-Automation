@@ -16,11 +16,13 @@ test("parses all Helpical conversation entries without relying on duplicate IDs"
     date: "1405/06/15 09:30",
     text: "سامانه پذیرش باز نمی‌شود.",
     status: null,
+    senderType: "C",
   });
   expect(details.latestMessage).toEqual({
     author: "پشتیبان یک",
     date: "1405/06/16 10:45",
     text: "موضوع بررسی شد؛ لطفاً دوباره آزمایش کنید.",
     status: "پاسخ داده شد",
+    senderType: "S",
   });
 });

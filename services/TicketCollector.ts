@@ -1,6 +1,7 @@
 import type { CenterConfig } from "../models/CenterConfig.js";
 import type { Ticket } from "../models/Ticket.js";
 import type { TicketDetails } from "../pages/TicketPage.js";
+import { priorityCodeFor, statusCodeFor } from "../utils/ticketMappings.js";
 
 export interface TicketListSource {
   listTickets(): Promise<Ticket[]>;
@@ -21,12 +22,14 @@ function normalizeCenterName(value: string): string {
 
 export class TicketCollector {
   private readonly enabledCenterNames: ReadonlySet<string>;
+  private readonly centerConfigs: readonly CenterConfig[];
 
   constructor(
     private readonly listSource: TicketListSource,
     private readonly detailSource: TicketDetailSource,
     centers: readonly CenterConfig[],
   ) {
+    this.centerConfigs = centers;
     this.enabledCenterNames = new Set(
       centers
         .filter(({ enabled }) => enabled)
@@ -131,10 +134,20 @@ export class TicketCollector {
     for (const ticket of selected) {
       await this.detailSource.open(ticket.url);
       const details = await this.detailSource.readDetails();
+      const configured = this.centerConfigs.find((center) =>
+        normalizeCenterName(center.name) === normalizeCenterName(ticket.center) ||
+        (!!center.adminName && normalizeCenterName(ticket.creator).includes(normalizeCenterName(center.adminName))),
+      );
+      if (!configured) throw new Error(`Center is not configured: ${ticket.center}`);
+      const status = details.status || ticket.status;
       collected.push({
         ...ticket,
         title: details.title || ticket.title,
-        status: details.status || ticket.status,
+        status,
+        centerId: configured.id,
+        priorityCode: ticket.priorityCode ?? priorityCodeFor(ticket.priority),
+        statusCode: statusCodeFor(status),
+        messages: details.messages,
         lastMessage: details.latestMessage,
       });
     }

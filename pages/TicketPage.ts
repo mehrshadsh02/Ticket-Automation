@@ -127,9 +127,8 @@ export class TicketPage {
     const author = await this.readAuthor(boxTitle);
     const date = await this.readDate(boxTitle);
 
-    const messageBody = holder
-      .locator(".panel-body")
-      .first();
+    const panelBody = holder.locator(".panel-body").first();
+    const messageBody = (await panelBody.count()) > 0 ? panelBody : holder;
 
     if ((await messageBody.count()) === 0) {
       throw new Error(
@@ -167,15 +166,25 @@ export class TicketPage {
       );
     }
 
+    const holderClass = (await holder.getAttribute("class")) ?? "";
+    const senderType = holderClass.includes("success-box") ? "S" : holderClass.includes("gray-box") ? "C" : undefined;
+
     return {
       author,
       date,
       text,
       status: status || null,
+      ...(senderType ? { senderType } : {}),
     };
   }
 
   private async readAuthor(boxTitle: Locator): Promise<string> {
+    const holder = boxTitle.locator("xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' talks-holder ')][1]");
+    const heading = holder.locator("h3, .talk-author, .author").first();
+    if ((await heading.count()) > 0) {
+      const headingText = normalizeText((await heading.textContent()) ?? "");
+      if (headingText) return headingText;
+    }
     if ((await boxTitle.count()) === 0) {
       return "";
     }
@@ -214,6 +223,13 @@ export class TicketPage {
   }
 
   private async readDate(boxTitle: Locator): Promise<string> {
+    const semanticTime = boxTitle.locator("time").first();
+    if ((await semanticTime.count()) > 0) {
+      const datetime = normalizeText((await semanticTime.getAttribute("datetime")) ?? "");
+      if (datetime) return datetime;
+      const text = normalizeText((await semanticTime.textContent()) ?? "");
+      if (text) return text;
+    }
     const time = boxTitle.locator("small.pe").first();
 
     if ((await time.count()) > 0) {
@@ -237,10 +253,14 @@ export class TicketPage {
     return match?.[1] ? normalizeText(match[1]) : "";
   }
 
- private async readMessageText(
+  private async readMessageText(
     body: Locator,
     statusLocator: Locator,
   ): Promise<string> {
+    const message = body.locator(".message").first();
+    if ((await message.count()) > 0) {
+      return normalizeText((await message.textContent()) ?? "");
+    }
     return normalizeText(
       await body.evaluate(
         (element, removeStatus) => {
