@@ -20,4 +20,5 @@ export interface Ticket {
   readonly url: string;
   readonly messages?: readonly TicketMessage[];
   readonly lastMessage?: TicketMessage | null;
+  readonly idSource?: "ticket-link" | "row-index-fallback";
 }

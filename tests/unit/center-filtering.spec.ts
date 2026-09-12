@@ -16,7 +16,9 @@ const ticket = (id: string, center: string): Ticket => ({
   updatedAt: "",
   url: `https://helpical.test/tickets/${id}/`,
   lastMessage: null,
+  idSource: "ticket-link",
 });
+
 
 test("collects only centers enabled in configuration", async () => {
   const centers: CenterConfig[] = [

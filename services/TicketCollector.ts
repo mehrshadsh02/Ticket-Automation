@@ -1,19 +1,15 @@
 import type { CenterConfig } from "../models/CenterConfig.js";
 import type { Ticket } from "../models/Ticket.js";
 import type { TicketDetails } from "../pages/TicketPage.js";
+export type PriorityCode = "C" | "H" | "L" | "N";
+export type StatusCode = 0 | 1 | 2 | 3;
 import {
   priorityCodeFor,
   statusCodeFor,
 } from "../utils/ticketMappings.js";
 
-function normalizeCenterName(value: string): string {
-  return value
-    .replace(/\u200c/g, " ")
-    .replace(/ي/g, "ی")
-    .replace(/ك/g, "ک")
-    .replace(/ـ/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+function normalizeCenterName(name: string): string {
+  return name.replace(/\u200c/g, " ").replace(/\s+/g, " ").trim();
 }
 
 export interface TicketListSource {
@@ -26,19 +22,20 @@ export interface TicketDetailSource {
 }
 
 export class TicketCollector {
+  private readonly centers: readonly CenterConfig[];
   private readonly enabledCenterNames: ReadonlySet<string>;
 
   constructor(
     private readonly listSource: TicketListSource,
     private readonly detailSource: TicketDetailSource,
-    private readonly centers: readonly CenterConfig[],
+    centers: readonly CenterConfig[],
   ) {
+    this.centers = centers;
+
     this.enabledCenterNames = new Set(
       centers
         .filter((center) => center.enabled)
-        .map((center) =>
-          normalizeCenterName(center.name),
-        ),
+        .map((center) => normalizeCenterName(center.name)),
     );
   }
 
@@ -63,8 +60,7 @@ export class TicketCollector {
   }
 
   async collect(): Promise<Ticket[]> {
-    const listedTickets =
-      await this.listSource.listTickets();
+    const listedTickets = await this.listSource.listTickets();
 
     const selected = listedTickets.filter((ticket) =>
       this.isCenterEnabled(ticket.center),
@@ -87,11 +83,9 @@ export class TicketCollector {
 
       await this.detailSource.open(ticket.url);
 
-      const details =
-        await this.detailSource.readDetails();
+      const details = await this.detailSource.readDetails();
 
-      const status =
-        details.status || ticket.status;
+      const status = details.status || ticket.status;
 
       collected.push({
         ...ticket,

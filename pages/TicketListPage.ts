@@ -150,7 +150,7 @@ export class TicketListPage {
     );
 
     const inner = normalizeText(
-      smallText.replace(/^[\(（]\s*|\s*[)）]$/g, "")
+      smallText.replace(/^[(（]\s*|\s*[)）]$/g, "")
     );
 
     const center = this.configuredCenters
@@ -176,7 +176,7 @@ export class TicketListPage {
     };
   }
 
- async listTickets(): Promise<Ticket[]> {
+  async listTickets(): Promise<Ticket[]> {
     if (this.isSigninUrl(this.page.url())) {
       throw new Error(
         `امکان خواندن تیکت‌ها وجود ندارد؛ مرورگر در صفحه ورود است. URL فعلی: ${this.page.url()}`,
@@ -185,33 +185,19 @@ export class TicketListPage {
 
     const table = await this.findTicketTable();
     if (!table) {
-      throw new Error('جدول تیکت‌ها در صفحه پیدا نشد');
+      throw new Error("جدول تیکت‌ها در صفحه پیدا نشد");
     }
 
-    const rows = table.locator('tbody tr');
+    const rows = table.locator("tbody tr");
     // انتظار برای بارگذاری ردیف‌ها؛ در صورت عدم موفقیت، catch آن را رها می‌کند.
-    await rows.first().waitFor({ state: 'attached', timeout: 10_000 }).catch(() => {});
+    await rows.first().waitFor({ state: "attached", timeout: 10_000 }).catch(() => {});
     const rowCount = await rows.count();
 
     const headers = await table
-      .locator('thead th')
+      .locator("thead th")
       .allInnerTexts();
 
     const columns = this.mapColumns(headers);
-
-    // === گزارش‌های دیباگ (می‌توانید این بخش را حذف کنید) ===
-    // console.log('[DEBUG] URL:', this.page.url());
-    // console.log('[DEBUG] total <table> on page:', await this.page.locator('table').count());
-    // console.log('[DEBUG] chosen table -> class:', await table.getAttribute('class'), '| id:', await table.getAttribute('id'));
-    // console.log('[DEBUG] raw thead headers:', JSON.stringify(headers));
-    // console.log('[DEBUG] column mapping:', JSON.stringify([...columns.entries()]));
-    // console.log('[DEBUG] tbody rowCount after waitFor:', rowCount);
-    // if (rowCount > 0) {
-    //   const firstRowCells = await rows.first().locator('td').count();
-    //   console.log('[DEBUG] first row <td> count:', firstRowCells);
-    //   console.log('[DEBUG] first row text:', JSON.stringify(await rows.first().innerText()));
-    // }
-    // =======================================================
 
     let skippedLowCells = 0;
     let skippedNoIdentity = 0;
@@ -219,24 +205,18 @@ export class TicketListPage {
     const tickets: Ticket[] = [];
 
     for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-      // اصلاح ۱: رفع اشکال تایپی و اعلان درست currentRow
       const currentRow = rows.nth(rowIndex);
-      
-      // اصلاح ۲: اعلان صحیح و یکباره متغیر cells
-      const cells = currentRow.locator('td');
+      const cells = currentRow.locator("td");
       const cellCount = await cells.count();
 
       if (cellCount < 4) {
         skippedLowCells++;
-        // اصلاح ۳: حذف استفاده از cellTexts که در این بلوک تعریف نشده است.
-        console.log('[DEBUG] row', rowIndex, 'SKIPPED cellCount<4 | cells:', cellCount);
+        console.log("[DEBUG] row", rowIndex, "SKIPPED cellCount<4 | cells:", cellCount);
         continue;
       }
 
-      // اصلاح ۴: اعلان cellTexts *بعد* از بررسی cellCount و *قبل* از استفاده
       const cellTexts = await cells.allInnerTexts();
 
-      // تابع کمکی برای استخراج متن سلول بر اساس نام ستون
       const getCellText = (field: TicketField): string => {
         const columnIndex = columns.get(field);
         if (
@@ -244,20 +224,20 @@ export class TicketListPage {
           columnIndex < 0 ||
           columnIndex >= cellTexts.length
         ) {
-          return '';
+          return "";
         }
         return normalizeText(cellTexts[columnIndex]);
       };
-      
+
       // ۱. استخراج شناسه تیکت (از ستون # یا لینک)
-      let ticketId = normalizeDigits(getCellText('id')).replace(/\D/g, '');
+      let ticketId = normalizeDigits(getCellText("id")).replace(/\D/g, "");
 
       // ۲. استخراج لینک تیکت
-      const linkLocator = currentRow.locator('a[href*="ticket"]').first(); // استفاده از currentRow
-      let href = '';
+      const linkLocator = currentRow.locator('a[href*="ticket"]').first();
+      let href = "";
       if ((await linkLocator.count()) > 0) {
-        href = (await linkLocator.getAttribute('href')) ?? '';
-        if (!ticketId) { // اگر شناسه از ستون id نیامد، از لینک استخراج کن
+        href = (await linkLocator.getAttribute("href")) ?? "";
+        if (!ticketId) {
           const match = normalizeDigits(href).match(/(\d+)/);
           if (match?.[1]) {
             ticketId = match[1];
@@ -265,12 +245,12 @@ export class TicketListPage {
         }
       }
 
-      // ۳. عنوان تیکت (تنظیمات مربوط به "/" و برداشتن آخرین بخش)
-      const rawTitle = getCellText('title');
+      // ۳. عنوان تیکت (برداشتن بخش نهایی بعد از اسلش در صورت وجود)
+      const rawTitle = getCellText("title");
       let title = rawTitle;
-      if (rawTitle.includes('/')) {
+      if (rawTitle.includes("/")) {
         const titleParts = rawTitle
-          .split('/')
+          .split("/")
           .map((part) => normalizeText(part))
           .filter(Boolean);
         const lastPart = titleParts.at(-1);
@@ -278,6 +258,7 @@ export class TicketListPage {
           title = lastPart;
         }
       }
+
       const organizationIndex = columns.get("organization");
       const centerIndex = columns.get("center");
 
@@ -291,12 +272,10 @@ export class TicketListPage {
       const fromParts = await this.extractFromCell(fromCell);
 
       const toSmall = toCell.locator("small").first();
-
       let assignee = "";
 
       if ((await toSmall.count()) > 0) {
         const rawAssignee = normalizeText(await toSmall.innerText());
-
         assignee = normalizeText(
           rawAssignee.replace(/^[(（]\s*|[)）]\s*$/g, ""),
         );
@@ -308,13 +287,18 @@ export class TicketListPage {
       const rawUpdatedAt = getCellText("updatedAt");
       const updatedAt = rawUpdatedAt === "-" ? "" : rawUpdatedAt;
 
+      // بررسی هویت تیکت و ثبت در شمارنده برای رفع ارور prefer-const
       if (!ticketId && !title) {
+        skippedNoIdentity++;
         continue;
       }
 
       const ticketUrl = href
         ? resolveUrl(href, this.page.url())
         : this.page.url();
+
+      // تعیین دقیق منبع ID
+      const idSource = ticketId ? "ticket-link" : "row-index-fallback";
 
       tickets.push({
         id: ticketId || `ROW-${rowIndex + 1}`,
@@ -329,17 +313,19 @@ export class TicketListPage {
         updatedAt,
         url: ticketUrl,
         lastMessage: null,
+        idSource,
       });
-
     }
 
-    // گزارش نهایی تعداد ردیف‌های skip شده و تعداد تیکت‌های نهایی
-    console.log('[DEBUG] skipped (cellCount<4):', skippedLowCells, '| skipped (no id/title):', skippedNoIdentity);
-    console.log('[DEBUG] final tickets.length:', tickets.length);
-    console.log('[DEBUG] <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<');
+    if (skippedLowCells > 0 || skippedNoIdentity > 0) {
+      console.log(
+        `[TicketListPage] Skipped rows summary -> Low cells: ${skippedLowCells}, No identity: ${skippedNoIdentity}`
+      );
+    }
 
     return tickets;
   }
+
 
   mapColumns(
     headers: string[],

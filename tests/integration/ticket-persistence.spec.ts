@@ -84,6 +84,7 @@ const makeTicket = (overrides: Partial<Ticket> = {}): Ticket => ({
     status: null,
   },
   ...overrides,
+  idSource: overrides.idSource ?? "ticket-link",
 });
 
 test.beforeEach(async () => {

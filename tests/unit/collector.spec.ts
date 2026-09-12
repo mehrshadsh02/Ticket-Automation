@@ -16,6 +16,7 @@ test("enriches listed tickets with detail status and latest message", async () =
     updatedAt: "date 2",
     url: "https://helpical.test/tickets/42/",
     lastMessage: null,
+    idSource: "ticket-link",
   };
   const latestMessage = {
     author: "Agent",
