@@ -19,6 +19,5 @@ export interface Ticket {
   readonly updatedAt: string;
   readonly url: string;
   readonly messages?: readonly TicketMessage[];
-  /** @deprecated presentation-only compatibility; persistence uses ticket_details. */
   readonly lastMessage?: TicketMessage | null;
 }

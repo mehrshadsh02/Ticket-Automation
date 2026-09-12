@@ -93,26 +93,19 @@ export class TicketPage {
 
   private async readMessages(): Promise<TicketMessage[]> {
     const holders = this.page.locator(
-      "#talks > .panel > .panel-body > .talks-holder",
+      "#talks .talks-holder",
     );
-
-    const count = await holders.count();
-
-    // fallback برای fixture فعلی تست
-    const fallbackHolders =
-      count > 0
-        ? holders
-        : this.page.locator(
-            "#talks .talks-holder, main .talks-holder",
-          );
 
     const messages: TicketMessage[] = [];
 
-    for (const holder of await fallbackHolders.all()) {
+    for (const holder of await holders.all()) {
       try {
-        messages.push(await this.parseMessage(holder));
+        const message =
+          await this.parseMessage(holder);
+
+        messages.push(message);
       } catch {
-        // یک پیام خراب نباید باعث توقف کل تیکت شود.
+        // یک پیام خراب نباید کل تیکت را متوقف کند.
       }
     }
 
@@ -127,14 +120,14 @@ export class TicketPage {
     const author = await this.readAuthor(boxTitle);
     const date = await this.readDate(boxTitle);
 
-    const panelBody = holder.locator(".panel-body").first();
-    const messageBody = (await panelBody.count()) > 0 ? panelBody : holder;
+    const panelBody = holder
+      .locator(".panel-body")
+      .first();
 
-    if ((await messageBody.count()) === 0) {
-      throw new Error(
-        "Helpical ticket message body was not found",
-      );
-    }
+    const messageBody =
+      (await panelBody.count()) > 0
+        ? panelBody
+        : holder;
 
     const statusLocator = messageBody
       .locator("small")
@@ -151,7 +144,10 @@ export class TicketPage {
       );
 
       status = normalizeText(
-        status.replace(/^وضعیت تیکت\s*:\s*/i, ""),
+        status.replace(
+          /^وضعیت تیکت\s*:\s*/i,
+          "",
+        ),
       );
     }
 
@@ -166,15 +162,33 @@ export class TicketPage {
       );
     }
 
-    const holderClass = (await holder.getAttribute("class")) ?? "";
-    const senderType = holderClass.includes("success-box") ? "S" : holderClass.includes("gray-box") ? "C" : undefined;
+    const holderClass =
+      (await holder.getAttribute("class")) ?? "";
+
+    let senderType:
+      | "S"
+      | "C"
+      | undefined;
+
+    if (holderClass.includes("success-box")) {
+      senderType = "S";
+    } else if (
+      holderClass.includes("gray-box") &&
+      (await holder
+        .locator(".box-title > span")
+        .count()) === 0
+    ) {
+      senderType = "C";
+    }
 
     return {
       author,
       date,
       text,
       status: status || null,
-      ...(senderType ? { senderType } : {}),
+      ...(senderType
+        ? { senderType }
+        : {}),
     };
   }
 

@@ -12,36 +12,36 @@ import { resolveUrl } from "../utils/url.js";
 
 type TicketField = "id" | "title" | "priority" | "organization" | "creator" | "center" | "assignee" | "status" | "createdAt" | "updatedAt";
 
-const headerAliases: Readonly<Record<TicketField, readonly string[]>> = {
-  id: ['#', 'id', 'شناسه', 'کد', 'شماره'],
-  title: [
-    "دسته بندی/عنوان",
-    "دسته‌بندی/عنوان",
-    "دسته بندی",
-    "دسته‌بندی",
-    "عنوان",
-    "موضوع",
-    "عنوان تیکت",
-    "title",
-  ],
-  priority: ["اهمیت", "اولویت", "priority"],
-  organization: ["از", "سازمان", "مشتری", "شرکت"],
-  creator: ["از", "ایجاد کننده", "ایجادکننده", "فرستنده", "ثبت کننده"],
-  center: ["به", "مرکز", "واحد", "دپارتمان"],
-  assignee: ["به", "مسئول", "ارجاع به", "کارشناس"],
-  status: ["وضعیت", "status"],
-  createdAt: ["ایجاد", "تاریخ ایجاد", "تاریخ ثبت", "زمان ثبت"],
-  updatedAt: [
-    "به روز رسانی",
-    "به‌روزرسانی",
-    "بروز رسانی",
-    "بروزرسانی",
-    "آخرین بروزرسانی",
-    "آخرین به روز رسانی",
-  ],
-};
+// const headerAliases: Readonly<Record<TicketField, readonly string[]>> = {
+//   id: ['#', 'id', 'شناسه', 'کد', 'شماره'],
+//   title: [
+//     "دسته بندی/عنوان",
+//     "دسته‌بندی/عنوان",
+//     "دسته بندی",
+//     "دسته‌بندی",
+//     "عنوان",
+//     "موضوع",
+//     "عنوان تیکت",
+//     "title",
+//   ],
+//   priority: ["اهمیت", "اولویت", "priority"],
+//   organization: ["از", "سازمان", "مشتری", "شرکت"],
+//   creator: ["از", "ایجاد کننده", "ایجادکننده", "فرستنده", "ثبت کننده"],
+//   center: ["به", "مرکز", "واحد", "دپارتمان"],
+//   assignee: ["به", "مسئول", "ارجاع به", "کارشناس"],
+//   status: ["وضعیت", "status"],
+//   createdAt: ["ایجاد", "تاریخ ایجاد", "تاریخ ثبت", "زمان ثبت"],
+//   updatedAt: [
+//     "به روز رسانی",
+//     "به‌روزرسانی",
+//     "بروز رسانی",
+//     "بروزرسانی",
+//     "آخرین بروزرسانی",
+//     "آخرین به روز رسانی",
+//   ],
+// };
 
-const requiredFields: readonly TicketField[] = ["id", "title"];
+// const requiredFields: readonly TicketField[] = ["id", "title"];
 
 export class TicketListPage {
   constructor(
@@ -150,7 +150,7 @@ export class TicketListPage {
     );
 
     const inner = normalizeText(
-      smallText.replace(/^[\(（]\s*|\s*[)）]$/g, ""),
+      smallText.replace(/^[\(（]\s*|\s*[)）]$/g, "")
     );
 
     const center = this.configuredCenters
@@ -278,17 +278,10 @@ export class TicketListPage {
           title = lastPart;
         }
       }
-
       const organizationIndex = columns.get("organization");
       const centerIndex = columns.get("center");
 
-      if (
-        organizationIndex === undefined ||
-        centerIndex === undefined
-      ) {
-        console.log(
-          "[DEBUG] organization/center column not found",
-        );
+      if (organizationIndex === undefined || centerIndex === undefined) {
         continue;
       }
 
@@ -305,34 +298,27 @@ export class TicketListPage {
         const rawAssignee = normalizeText(await toSmall.innerText());
 
         assignee = normalizeText(
-          rawAssignee.replace(/^[\(（]\s*|\s*[)）]$/g, ""),
+          rawAssignee.replace(/^[(（]\s*|[)）]\s*$/g, ""),
         );
       }
 
-      // استخراج سایر فیلدها
-      const status = getCellText('status');
-      const priority = getCellText('priority');
-      const createdAt = getCellText('createdAt');
-      const rawUpdatedAt = getCellText('updatedAt');
-      const updatedAt = rawUpdatedAt === '-' ? '' : rawUpdatedAt; // تبدیل '-' به خالی
+      const status = getCellText("status");
+      const priority = getCellText("priority");
+      const createdAt = getCellText("createdAt");
+      const rawUpdatedAt = getCellText("updatedAt");
+      const updatedAt = rawUpdatedAt === "-" ? "" : rawUpdatedAt;
 
-      // شرط رد کردن ردیف: اگر نه شناسه و نه عنوان معتبر داشته باشد
       if (!ticketId && !title) {
-          skippedNoIdentity++;
-          console.log('[DEBUG] row', rowIndex, 'SKIPPED no-id&no-title | cells:', JSON.stringify(cellTexts));
-          continue;
+        continue;
       }
 
-      // ساخت URL نهایی تیکت
-      const ticketUrl = new URL(
-        `/ticket/${ticketId}/`,
-        this.page.url(),
-      ).toString();
+      const ticketUrl = href
+        ? resolveUrl(href, this.page.url())
+        : this.page.url();
 
-      // اضافه کردن تیکت استخراج شده به لیست
       tickets.push({
-        id: ticketId || `ROW-${rowIndex + 1}`, // استفاده از ID استخراج شده یا شماره ردیف به عنوان fallback
-        title: title || 'بدون عنوان',          // استفاده از عنوان استخراج شده یا "بدون عنوان"
+        id: ticketId || `ROW-${rowIndex + 1}`,
+        title: title || "بدون عنوان",
         priority,
         organization: fromParts.organization,
         creator: fromParts.creator,
@@ -342,8 +328,9 @@ export class TicketListPage {
         createdAt,
         updatedAt,
         url: ticketUrl,
-        lastMessage: null, // مقداردهی اولیه برای lastMessage
+        lastMessage: null,
       });
+
     }
 
     // گزارش نهایی تعداد ردیف‌های skip شده و تعداد تیکت‌های نهایی
@@ -354,122 +341,80 @@ export class TicketListPage {
     return tickets;
   }
 
+  mapColumns(
+    headers: string[],
+  ): Map<TicketField, number> {
+    const mapping = new Map<TicketField, number>();
 
-  // private mapColumns(
-  //   headers: string[],
-  //   strict = false,
-  // ): Map<TicketField, number> {
-  //   const result = new Map<TicketField, number>();
+    headers.forEach((header, index) => {
+      const clean = normalizeText(header);
 
-  //   headers.forEach((header, index) => {
-  //     const rawTrimmed = (header ?? "").trim();
-  //     const normalizedHeader = canonicalHeader(rawTrimmed);
+      if (!clean) {
+        return;
+      }
 
-  //     // ۱. تطبیق مستقیم هدرهای خاص مانند '#' یا 'id' قبل از حذف سمبل‌ها
-  //     if (rawTrimmed === '#' || rawTrimmed.toLowerCase() === 'id') {
-  //       result.set('id' , index);
-  //       return;
-  //     }
+      if (clean === "#") {
+        mapping.set("id", index);
+      } else if (
+        clean === "دسته بندی/عنوان" ||
+        clean === "دسته‌بندی/عنوان" ||
+        clean.includes("عنوان") ||
+        clean.includes("دسته")
+      ) {
+        mapping.set("title", index);
+      } else if (
+        clean === "اهمیت" ||
+        clean === "اولویت"
+      ) {
+        mapping.set("priority", index);
+      } else if (
+        clean === "از" ||
+        clean === "سازمان" ||
+        clean === "مشتری" ||
+        clean === "شرکت"
+      ) {
+        mapping.set("organization", index);
+      } else if (
+        clean === "ایجاد کننده" ||
+        clean === "ایجادکننده" ||
+        clean === "فرستنده" ||
+        clean === "ثبت کننده"
+      ) {
+        mapping.set("creator", index);
+      } else if (
+        clean === "به" ||
+        clean === "مرکز" ||
+        clean === "واحد" ||
+        clean === "دپارتمان"
+      ) {
+        mapping.set("center", index);
+      } else if (
+        clean === "مسئول" ||
+        clean === "ارجاع به" ||
+        clean === "کارشناس"
+      ) {
+        mapping.set("assignee", index);
+      } else if (
+        clean.includes("وضعیت")
+      ) {
+        mapping.set("status", index);
+      } else if (
+        clean.includes("ایجاد")
+      ) {
+        mapping.set("createdAt", index);
+      } else if (
+        clean.includes("به روز رسانی") ||
+        clean.includes("به‌روزرسانی") ||
+        clean.includes("بروز رسانی") ||
+        clean.includes("بروزرسانی") ||
+        clean.includes("آخرین بروزرسانی")
+      ) {
+        mapping.set("updatedAt", index);
+      }
+    });
 
-  //     /*
-  //      * بسیار مهم:
-  //      * ستون noExl هدر خالی دارد. مقدار خالی نباید با aliasها مقایسه شود.
-  //      */
-  //     if (!normalizedHeader) {
-  //       return;
-  //     }
-
-  //     // ۲. تطبیق بر اساس Aliasها
-  //     for (const [field, aliases] of Object.entries(headerAliases) as [
-  //       TicketField,
-  //       readonly string[],
-  //     ][]) {
-  //       const matched = aliases.some((alias) => {
-  //         const rawAlias = alias.trim();
-  //         const normalizedAlias = canonicalHeader(rawAlias);
-
-  //         // بررسی هم به صورت متن خام، هم متن نرمال‌شده
-  //         if (rawTrimmed === rawAlias || rawTrimmed.toLowerCase() === rawAlias.toLowerCase()) {
-  //           return true;
-  //         }
-
-  //         if (!normalizedAlias) {
-  //           return false;
-  //         }
-
-  //         return (
-  //           normalizedHeader === normalizedAlias ||
-  //           normalizedHeader.includes(normalizedAlias) ||
-  //           normalizedAlias.includes(normalizedHeader)
-  //         );
-  //       });
-
-  //       if (matched && !result.has(field)) {
-  //         result.set(field, index);
-  //       }
-  //     }
-  //   });
-
-  //   if (strict) {
-  //     const missingFields = requiredFields.filter(
-  //       (field) => !result.has(field),
-  //     );
-
-  //     if (missingFields.length > 0) {
-  //       throw new Error(
-  //         `ستون‌های ضروری جدول پیدا نشدند: ${missingFields.join(", ")}. ` +
-  //           `هدرهای موجود: ${headers
-  //             .map((header) => (header ?? "").trim())
-  //             .filter(Boolean)
-  //             .join(" | ")}`,
-  //       );
-  //     }
-  //   }
-
-  //   return result;
-  // }
-
-  mapColumns(headers: string[]): Map<TicketField, number> {
-  const mapping = new Map<TicketField, number>();
-
-  headers.forEach((header, index) => {
-    // 1. نرمال‌سازی دقیق متن هدر
-    const clean = header.trim();
-    
-    // 2. اولویت اول: ستون‌های حساس و طولانی‌تر (ابتدا باید چک شوند)
-    if (clean === 'به روز رسانی' || clean === 'به‌روزرسانی' || clean === 'بروز رسانی' || clean === 'بروزرسانی') {
-      mapping.set('updatedAt', index);
-    } 
-    // 3. تطبیق دقیق ستون‌های "از" و "به"
-    else if (clean === 'از') {
-      mapping.set('organization', index);
-    } 
-    else if (clean === 'به') {
-      mapping.set('center', index);
-    }
-    // 4. سایر ستون‌ها
-    else if (clean === '#') {
-      mapping.set('id', index);
-    } 
-    else if (clean.includes('عنوان') || clean.includes('دسته')) {
-      mapping.set('title', index);
-    } 
-    else if (clean.includes('وضعیت')) {
-      mapping.set('status', index);
-    } 
-    else if (clean.includes('ایجاد')) {
-      mapping.set('createdAt', index);
-    }
-    else if (clean.includes('اهمیت') || clean.includes('اولویت')) {
-      mapping.set('priority', index);
-    }
-  });
-
-  // لاگ برای اطمینان از صحت نگاشت
-  console.log('[DEBUG] column mapping result:', Object.fromEntries(mapping));
-  
-  return mapping;
-}
+    return mapping;
+  }
 
 
   private splitCombinedCell(value: string): {

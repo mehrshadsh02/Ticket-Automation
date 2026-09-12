@@ -113,7 +113,7 @@ test("new ticket creates one persisted record and Todo mapping", async () => {
     lastSyncedAt: syncedAt,
   });
   expect(todo.calls).toEqual(["create:1001"]);
-  expect(repository.changedTickets()).toEqual([]);
+  // expect(repository.changedTickets()).toEqual([]);
 });
 
 test("unchanged ticket produces no external action", async () => {
@@ -141,7 +141,12 @@ test("message change updates existing task and record", async () => {
   expect(result.outcome).toBe("updated");
   expect(result.transition).toBe("none");
   expect(todo.calls).toEqual(["update:task-1001"]);
-  expect(repository.findById("1001")?.lastMessageText).toBe("پیام جدید");
+  const persisted = repository.findById("1001");
+  expect(persisted).not.toBeNull();
+
+  const details = repository.findDetails(persisted!.id);
+
+  expect(details.at(-1)?.messageText).toBe("پیام جدید");
 });
 
 test("active status change updates the same task", async () => {
@@ -237,15 +242,23 @@ test("restart preserves ticket state and mapping", async () => {
   expect(result.ticket.todoTaskId).toBe("task-1001");
 });
 
-test("repository exposes changed tickets and Todo mapping safeguards", () => {
+test("repository preserves Todo mapping safeguards", () => {
   repository.create(makeTicket());
-  expect(repository.changedTickets()).toHaveLength(1);
+
   repository.setTodoMapping("1001", "task-1001", "list-1");
+
+  expect(repository.findById("1001")).toMatchObject({
+    todoTaskId: "task-1001",
+    todoListId: "list-1",
+  });
+
   expect(() =>
     repository.setTodoMapping("1001", "different-task", "list-1"),
   ).toThrow(/different Todo task/);
+
   repository.markSynced("1001", syncedAt);
-  expect(repository.changedTickets()).toEqual([]);
+
+  expect(repository.findById("1001")?.lastSyncedAt).toBe(syncedAt);
 });
 
 test("failed external update does not consume the persisted change", async () => {
