@@ -13,18 +13,23 @@ export class TicketPage {
   constructor(private readonly page: Page) {}
 
   async open(url: string): Promise<void> {
+    console.log("[DEBUG][TicketPage] opening:", url);
+
     await this.page.goto(url, {
       waitUntil: "domcontentloaded",
       timeout: 30_000,
     });
 
-    await this.page
-      .locator("#talks")
-      .waitFor({
-        state: "attached",
-        timeout: 15_000,
-      })
-      .catch(() => {});
+    // console.log("[DEBUG][TicketPage] actual URL:", this.page.url());
+    // console.log(
+    //   "[DEBUG][TicketPage] title:",
+    //   await this.page.title(),
+    // );
+
+    // console.log(
+    //   "[DEBUG][TicketPage] talks count:",
+    //   await this.page.locator("#talks").count(),
+    // );
   }
 
   async readDetails(): Promise<TicketDetails> {

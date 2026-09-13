@@ -206,6 +206,14 @@ export class TicketListPage {
 
     for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
       const currentRow = rows.nth(rowIndex);
+      const rowText = await currentRow.innerText();
+
+      if (normalizeDigits(rowText).includes("62521")) {
+        console.log(
+          "[DEBUG][TicketListPage] ROW 62521 HTML:",
+          await currentRow.evaluate((el) => el.outerHTML),
+        );
+      }
       const cells = currentRow.locator("td");
       const cellCount = await cells.count();
 
@@ -237,6 +245,15 @@ export class TicketListPage {
       let href = "";
       if ((await linkLocator.count()) > 0) {
         href = (await linkLocator.getAttribute("href")) ?? "";
+        console.log(
+          "[DEBUG][TicketListPage] ticket link:",
+          JSON.stringify({
+            row: rowIndex,
+            id: ticketId,
+            href,
+            pageUrl: this.page.url(),
+          }),
+        );
         if (!ticketId) {
           const match = normalizeDigits(href).match(/(\d+)/);
           if (match?.[1]) {
@@ -293,9 +310,15 @@ export class TicketListPage {
         continue;
       }
 
-      const ticketUrl = href
-        ? resolveUrl(href, this.page.url())
-        : this.page.url();
+      // const ticketUrl = href
+      //   ? resolveUrl(href, this.page.url())
+      //   : this.page.url();
+
+      // ساخت URL نهایی تیکت
+      const ticketUrl = new URL(
+        `/ticket/${ticketId}/`,
+        this.page.url(),
+      ).toString();
 
       // تعیین دقیق منبع ID
       const idSource = ticketId ? "ticket-link" : "row-index-fallback";
