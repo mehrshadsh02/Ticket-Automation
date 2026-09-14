@@ -1,15 +1,18 @@
 import type { CenterConfig } from "../models/CenterConfig.js";
 import type { Ticket } from "../models/Ticket.js";
 import type { TicketDetails } from "../pages/TicketPage.js";
-export type PriorityCode = "C" | "H" | "L" | "N";
-export type StatusCode = 0 | 1 | 2 | 3;
 import {
   priorityCodeFor,
   statusCodeFor,
 } from "../utils/ticketMappings.js";
 
-function normalizeCenterName(name: string): string {
-  return name.replace(/\u200c/g, " ").replace(/\s+/g, " ").trim();
+function normalizeCenterName(value: string): string {
+  return value
+    .replace(/\u200c/g, " ")
+    .replace(/ي/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export interface TicketListSource {
@@ -22,74 +25,62 @@ export interface TicketDetailSource {
 }
 
 export class TicketCollector {
-  private readonly centers: readonly CenterConfig[];
-  private readonly enabledCenterNames: ReadonlySet<string>;
-
   constructor(
     private readonly listSource: TicketListSource,
     private readonly detailSource: TicketDetailSource,
-    centers: readonly CenterConfig[],
-  ) {
-    this.centers = centers;
+    private readonly centers: readonly CenterConfig[],
+  ) {}
 
-    this.enabledCenterNames = new Set(
-      centers
-        .filter((center) => center.enabled)
-        .map((center) => normalizeCenterName(center.name)),
+  private centerForTicket(
+    ticket: Ticket,
+  ): CenterConfig | null {
+    const center = normalizeCenterName(ticket.center);
+
+    if (!center) {
+      return null;
+    }
+
+    return (
+      this.centers
+        .filter((item) => item.enabled)
+        .find((item) => {
+          const configured = normalizeCenterName(
+            item.name,
+          );
+
+          return (
+            center === configured ||
+            center.includes(configured) ||
+            configured.includes(center)
+          );
+        }) ?? null
     );
-  }
-
-  private isCenterEnabled(center: string): boolean {
-    const normalized = normalizeCenterName(center);
-
-    if (!normalized) {
-      return false;
-    }
-
-    for (const enabledName of this.enabledCenterNames) {
-      if (
-        normalized === enabledName ||
-        normalized.includes(enabledName) ||
-        enabledName.includes(normalized)
-      ) {
-        return true;
-      }
-    }
-
-    return false;
   }
 
   async collect(): Promise<Ticket[]> {
-    const listedTickets = await this.listSource.listTickets();
-
-    const selected = listedTickets.filter((ticket) =>
-      this.isCenterEnabled(ticket.center),
-    );
+    const listedTickets =
+      await this.listSource.listTickets();
 
     const collected: Ticket[] = [];
 
-    for (const ticket of selected) {
-      const configured = this.centers.find(
-        (center) =>
-          normalizeCenterName(center.name) ===
-          normalizeCenterName(ticket.center),
-      );
+    for (const ticket of listedTickets) {
+      const center = this.centerForTicket(ticket);
 
-      if (!configured) {
-        throw new Error(
-          `Center is not configured: ${ticket.center}`,
-        );
+      if (!center) {
+        continue;
       }
 
       await this.detailSource.open(ticket.url);
 
-      const details = await this.detailSource.readDetails();
+      const details =
+        await this.detailSource.readDetails();
 
-      const status = details.status || ticket.status;
+      const status =
+        details.status || ticket.status;
 
       collected.push({
         ...ticket,
-        centerId: configured.id,
+        centerId: center.id,
         title: details.title || ticket.title,
         status,
         priorityCode:

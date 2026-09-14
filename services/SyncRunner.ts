@@ -31,7 +31,7 @@ export async function runSync(config: AppConfig): Promise<void> {
   try {
     browser = await chromium.launch({
       channel: 'chrome',
-      headless: false,
+      headless: true,
       slowMo: 500,
     });
     const page = await browser.newPage();
@@ -59,21 +59,44 @@ export async function runSync(config: AppConfig): Promise<void> {
     logger.info({ event: 'collect_tickets_done', count: tickets.length });
 
     // ۴. پردازش تیکت‌ها و همگام‌سازی با To Do
-  //   for (const ticket of tickets) {
-  //     try {
-  //       const before = repo.findById(ticket.id);
-  //       const result = await processor.process(ticket);
-  //       if (!before) stats.new++;
-  //       else if (result.outcome !== 'unchanged') stats.changed++;
-  //       if (result.outcome === 'created') stats.created++;
-  //       if (result.outcome === 'updated') stats.updated++;
-  //       if (result.transition === 'complete') stats.completed++;
-  //       if (result.transition === 'reopen') stats.reopened++;
-  //     } catch (error) {
-  //       stats.errors++;
-  //       logger.error({ event: 'ticket_error', ticketId: ticket.id, error: String(error) });
-  //     }
-  //   }
+      // ۴. پردازش تیکت‌ها و همگام‌سازی با To Do
+    for (const ticket of tickets) {
+      try {
+        const before = repo.findById(ticket.id);
+
+        const result = await processor.process(ticket);
+
+        if (!before) {
+          stats.new++;
+        } else if (result.outcome !== "unchanged") {
+          stats.changed++;
+        }
+
+        if (result.outcome === "created") {
+          stats.created++;
+        }
+
+        if (result.outcome === "updated") {
+          stats.updated++;
+        }
+
+        if (result.transition === "complete") {
+          stats.completed++;
+        }
+
+        if (result.transition === "reopen") {
+          stats.reopened++;
+        }
+      } catch (error) {
+        stats.errors++;
+
+        logger.error({
+          event: "ticket_error",
+          ticketId: ticket.id,
+          error: String(error),
+        });
+      }
+    }
   } catch (error) {
     stats.errors++;
     logger.error({ event: 'sync_error', error: String(error), stack: (error as Error)?.stack });

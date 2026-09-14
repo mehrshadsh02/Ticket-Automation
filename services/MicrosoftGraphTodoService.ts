@@ -23,7 +23,12 @@ interface GraphTodoTask {
 
 export interface MicrosoftGraphTodoServiceOptions {
   readonly todoListName?: string;
-  readonly centers?: readonly { name: string; todoListName: string; todoGroupName?: string }[];
+  readonly centers?: readonly {
+    id: string;
+    name: string;
+    todoListName: string;
+    todoGroupName?: string;
+  }[];
   readonly tokenProvider: AccessTokenProvider;
   readonly fetch?: typeof fetch;
   readonly graphBaseUrl?: string;
@@ -32,25 +37,45 @@ export interface MicrosoftGraphTodoServiceOptions {
 export class MicrosoftGraphTodoService implements TodoService {
   private readonly fetch: typeof fetch;
   private readonly graphBaseUrl: string;
-  private listId: string | null = null;
-  private listPromise: Promise<string> | null = null;
 
-  constructor(private readonly options: MicrosoftGraphTodoServiceOptions) {
+  private readonly listIds = new Map<string, string>();
+  private readonly listPromises = new Map<string, Promise<string>>();
+
+  constructor(
+    private readonly options: MicrosoftGraphTodoServiceOptions,
+  ) {
     this.fetch = options.fetch ?? globalThis.fetch;
     this.graphBaseUrl = (
-      options.graphBaseUrl ?? "https://graph.microsoft.com/v1.0"
-    ).replace(/\/$/, "");
+      options.graphBaseUrl ??
+      "https://graph.microsoft.com/v1.0"
+    ).replace(/\/+$/, "");
   }
 
-  async getOrCreateTodoList(center?: string): Promise<string> {
-    if (this.listId) return this.listId;
-    const listName = this.listNameFor(center);
-    this.listPromise ??= this.findOrCreateList(listName);
+  async getOrCreateTodoList(centerId?: string): Promise<string> {
+    const key = centerId ?? "__default__";
+
+    const cached = this.listIds.get(key);
+    if (cached) {
+      return cached;
+    }
+
+    const pending = this.listPromises.get(key);
+    if (pending) {
+      return pending;
+    }
+
+    const promise = this.findOrCreateList(
+      this.listNameFor(centerId),
+    );
+
+    this.listPromises.set(key, promise);
+
     try {
-      this.listId = await this.listPromise;
-      return this.listId;
+      const listId = await promise;
+      this.listIds.set(key, listId);
+      return listId;
     } finally {
-      this.listPromise = null;
+      this.listPromises.delete(key);
     }
   }
 
@@ -58,9 +83,30 @@ export class MicrosoftGraphTodoService implements TodoService {
     ticket: Ticket,
     idempotencyKey: string,
   ): Promise<TodoTaskMapping> {
-    const listId = await this.getOrCreateTodoList(ticket.center);
-    const existing = await this.findTaskByExternalId(listId, idempotencyKey);
-    if (existing) return { taskId: existing.id, listId };
+    const listId = await this.getOrCreateTodoList(
+      ticket.centerId,
+    );
+
+    const existing =
+      await this.findTaskByExternalId(
+        listId,
+        idempotencyKey,
+      );
+
+    if (existing) {
+      await this.updateTask(
+        {
+          taskId: existing.id,
+          listId,
+        },
+        ticket,
+      );
+
+      return {
+        taskId: existing.id,
+        listId,
+      };
+    }
 
     const task = await this.request<GraphTodoTask>(
       `/me/todo/lists/${encodeURIComponent(listId)}/tasks`,
@@ -80,44 +126,79 @@ export class MicrosoftGraphTodoService implements TodoService {
       },
       201,
     );
-    return { taskId: task.id, listId };
+
+    return {
+      taskId: task.id,
+      listId,
+    };
   }
 
-  async updateTask(mapping: TodoTaskMapping, ticket: Ticket): Promise<void> {
-    await this.patchTask(mapping, this.taskFields(ticket));
+  async updateTask(
+    mapping: TodoTaskMapping,
+    ticket: Ticket,
+  ): Promise<void> {
+    await this.patchTask(
+      mapping,
+      this.taskFields(ticket),
+    );
   }
 
-  async completeTask(mapping: TodoTaskMapping, ticket: Ticket): Promise<void> {
+  async completeTask(
+    mapping: TodoTaskMapping,
+    ticket: Ticket,
+  ): Promise<void> {
     await this.patchTask(mapping, {
       ...this.taskFields(ticket),
       status: "completed",
     });
   }
 
-  async reopenTask(mapping: TodoTaskMapping, ticket: Ticket): Promise<void> {
+  async reopenTask(
+    mapping: TodoTaskMapping,
+    ticket: Ticket,
+  ): Promise<void> {
     await this.patchTask(mapping, {
       ...this.taskFields(ticket),
       status: "notStarted",
     });
   }
 
+  private listNameFor(centerId?: string): string {
+    if (centerId) {
+      const center = this.options.centers?.find(
+        (item) => item.id === centerId,
+      );
 
-  private listNameFor(center?: string): string {
-    return this.options.centers?.find((item) => item.name === center)?.todoListName ?? this.options.todoListName ?? "His Ticket";
+      if (center) {
+        return center.todoListName;
+      }
+    }
+
+    return this.options.todoListName ?? "His Ticket";
   }
 
-  private async findOrCreateList(listName = this.options.todoListName ?? "His Ticket"): Promise<string> {
-    for await (const list of this.paginate<GraphTodoList>("/me/todo/lists")) {
-      if (list.displayName === listName) return list.id;
+  private async findOrCreateList(
+    listName: string,
+  ): Promise<string> {
+    for await (const list of this.paginate<GraphTodoList>(
+      "/me/todo/lists",
+    )) {
+      if (list.displayName === listName) {
+        return list.id;
+      }
     }
+
     const created = await this.request<GraphTodoList>(
       "/me/todo/lists",
       {
         method: "POST",
-        body: JSON.stringify({ displayName: listName }),
+        body: JSON.stringify({
+          displayName: listName,
+        }),
       },
       201,
     );
+
     return created.id;
   }
 
@@ -125,37 +206,51 @@ export class MicrosoftGraphTodoService implements TodoService {
     listId: string,
     externalId: string,
   ): Promise<GraphTodoTask | null> {
-    const path = `/me/todo/lists/${encodeURIComponent(listId)}/tasks?$expand=linkedResources`;
-    for await (const task of this.paginate<GraphTodoTask>(path)) {
+    const path =
+      `/me/todo/lists/${encodeURIComponent(listId)}` +
+      `/tasks?$expand=linkedResources`;
+
+    for await (const task of this.paginate<GraphTodoTask>(
+      path,
+    )) {
       if (
         task.linkedResources?.some(
           (resource) => resource.externalId === externalId,
         )
-      )
+      ) {
         return task;
+      }
     }
+
     return null;
   }
 
-  private taskFields(ticket: Ticket): Record<string, unknown> {
+  private taskFields(
+    ticket: Ticket,
+  ): Record<string, unknown> {
     return {
-      title: `[${ticket.priority}] ${ticket.center} — ${ticket.title}`,
-      body: { contentType: "text", content: this.description(ticket) },
+      title: `[${ticket.status}] - [${ticket.priority}] #${ticket.id} - ${ticket.title}`,
+      body: {
+        contentType: "text",
+        content: this.description(ticket),
+      },
     };
   }
 
   private description(ticket: Ticket): string {
     return [
-      `Center: ${ticket.center}`,
-      `Ticket ID: ${ticket.id}`,
-      `Title: ${ticket.title}`,
-      `Priority: ${ticket.priority}`,
-      `Helpical status: ${ticket.status}`,
-      `Creator: ${ticket.creator}`,
-      `Assignee: ${ticket.assignee}`,
-      `Latest message: ${ticket.lastMessage?.text ?? ""}`,
-      `Latest message date: ${ticket.lastMessage?.date ?? ""}`,
-      `Helpical URL: ${ticket.url}`,
+      `مرکز: ${ticket.center}`,
+      `شماره تیکت: #${ticket.id}`,
+      `عنوان: ${ticket.title}`,
+      `اولویت: ${ticket.priority}`,
+      `وضعیت: ${ticket.status}`,
+      `ایجاد کننده: ${ticket.creator}`,
+      `پشتیبان: ${ticket.assignee ?? "-"}`,
+      "",
+      `آخرین پیام: ${ticket.lastMessage?.text ?? "-"}`,
+      `تاریخ آخرین پیام: ${ticket.lastMessage?.date ?? "-"}`,
+      "",
+      `Helpical: ${ticket.url}`,
     ].join("\n");
   }
 
@@ -164,18 +259,27 @@ export class MicrosoftGraphTodoService implements TodoService {
     body: Record<string, unknown>,
   ): Promise<void> {
     await this.request<void>(
-      `/me/todo/lists/${encodeURIComponent(mapping.listId)}/tasks/${encodeURIComponent(mapping.taskId)}`,
-      { method: "PATCH", body: JSON.stringify(body) },
+      `/me/todo/lists/${encodeURIComponent(mapping.listId)}` +
+        `/tasks/${encodeURIComponent(mapping.taskId)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      },
       200,
     );
   }
 
-  private async *paginate<T>(initialPath: string): AsyncGenerator<T> {
+  private async *paginate<T>(
+    initialPath: string,
+  ): AsyncGenerator<T> {
     let next: string | null = initialPath;
+
     while (next) {
       const page: GraphCollection<T> =
         await this.request<GraphCollection<T>>(next);
+
       yield* page.value;
+
       next = page["@odata.nextLink"] ?? null;
     }
   }
@@ -185,28 +289,49 @@ export class MicrosoftGraphTodoService implements TodoService {
     init: RequestInit = {},
     expectedStatus = 200,
   ): Promise<T> {
-    const accessToken = await this.options.tokenProvider.getAccessToken();
-    const response = await this.fetch(this.urlFor(pathOrUrl), {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-        ...init.headers,
+    const accessToken =
+      await this.options.tokenProvider.getAccessToken();
+
+    const response = await this.fetch(
+      this.urlFor(pathOrUrl),
+      {
+        ...init,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/json",
+          ...(init.body
+            ? { "Content-Type": "application/json" }
+            : {}),
+          ...init.headers,
+        },
       },
-    });
+    );
+
     if (response.status !== expectedStatus) {
-      const detail = (await response.text()).slice(0, 1_000);
+      const detail = (await response.text()).slice(
+        0,
+        1_000,
+      );
+
       throw new Error(
         `Microsoft Graph request failed (${response.status} ${response.statusText}): ${detail}`,
       );
     }
-    if (response.status === 204) return undefined as T;
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
     return (await response.json()) as T;
   }
 
   private urlFor(pathOrUrl: string): string {
-    if (pathOrUrl.startsWith("https://")) return pathOrUrl;
-    return `${this.graphBaseUrl}${pathOrUrl.startsWith("/") ? "" : "/"}${pathOrUrl}`;
+    if (pathOrUrl.startsWith("https://")) {
+      return pathOrUrl;
+    }
+
+    return `${this.graphBaseUrl}${
+      pathOrUrl.startsWith("/") ? "" : "/"
+    }${pathOrUrl}`;
   }
 }

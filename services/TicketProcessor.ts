@@ -19,7 +19,7 @@ export type ProcessingOutcome =
 
 export interface ProcessingResult {
   readonly outcome: ProcessingOutcome;
-  readonly transition: TicketTransition;
+  readonly transition: TicketTransition;  
   readonly ticket: PersistedTicket;
 }
 
@@ -32,54 +32,82 @@ export class TicketProcessor {
       new Date().toISOString(),
   ) {}
 
-  async process(ticket: Ticket): Promise<ProcessingResult> {
-    const previous = this.repository.findById(ticket.id);
+async process(ticket: Ticket): Promise<ProcessingResult> {
+  const previous = this.repository.findById(ticket.id);
 
-    if (!previous) {
-      return this.processNew(ticket);
-    }
-
-    this.repository.insertDetailsForTicket(ticket);
-
-    const mapping = this.mappingFor(previous);
-
-    if (!mapping) {
-      return this.attachMissingMapping(ticket, previous);
-    }
-
-    if (!this.hasChanged(previous, ticket)) {
-      return {
-        outcome: "unchanged",
-        transition: "none",
-        ticket: previous,
-      };
-    }
-
-    const transition = this.stateMachine.transition(
-      previous.statusCode,
-      this.requireStatusCode(ticket),
-    );
-
-    if (transition === "complete") {
-      await this.todoService.completeTask(mapping, ticket);
-    } else if (transition === "reopen") {
-      await this.todoService.reopenTask(mapping, ticket);
-    } else {
-      await this.todoService.updateTask(mapping, ticket);
-    }
-
-    this.repository.updateTicket(ticket);
-
-    return {
-      outcome: "updated",
-      transition,
-      ticket: this.repository.markSynced(
-        ticket.id,
-        this.now(),
-      ),
-    };
+  if (!previous) {
+    return this.processNew(ticket);
   }
 
+  this.repository.insertDetailsForTicket(ticket);
+
+  const mapping = this.mappingFor(previous);
+
+  if (!mapping) {
+    return this.attachMissingMapping(ticket, previous);
+  }
+
+  const transition = this.stateMachine.transition(
+    previous.statusCode,
+    this.requireStatusCode(ticket),
+  );
+
+  let activeMapping = mapping;
+
+  try {
+    await this.applyTodoChange(
+      activeMapping,
+      ticket,
+      transition,
+    );
+  } catch (error) {
+    if (!String(error).includes("404 Not Found")) {
+      throw error;
+    }
+
+    activeMapping = await this.todoService.createTask(
+      ticket,
+      ticket.id,
+    );
+
+    this.repository.setTodoMapping(
+      ticket.id,
+      activeMapping.taskId,
+      activeMapping.listId,
+    );
+
+    await this.applyTodoChange(
+      activeMapping,
+      ticket,
+      transition,
+    );
+  }
+
+  this.repository.updateTicket(ticket);
+
+  return {
+    outcome: "updated",
+    transition,
+    ticket: this.repository.markSynced(
+      ticket.id,
+      this.now(),
+    ),
+  };
+}
+
+private async applyTodoChange(
+  mapping: TodoTaskMapping,
+  ticket: Ticket,
+  transition: TicketTransition,
+): Promise<void> {
+  if (transition === "complete") {
+    await this.todoService.completeTask(mapping, ticket);
+  } else if (transition === "reopen") {
+    await this.todoService.reopenTask(mapping, ticket);
+  } else {
+    await this.todoService.updateTask(mapping, ticket);
+  }
+}
   private async processNew(
     ticket: Ticket,
   ): Promise<ProcessingResult> {
