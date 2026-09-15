@@ -4,7 +4,10 @@ import type { TicketDetails } from "../pages/TicketPage.js";
 import {
   priorityCodeFor,
   statusCodeFor,
+  statusKeyFor,
 } from "../utils/ticketMappings.js";
+
+
 
 function normalizeCenterName(value: string): string {
   return value
@@ -87,6 +90,7 @@ export class TicketCollector {
           ticket.priorityCode ??
           priorityCodeFor(ticket.priority),
         statusCode: statusCodeFor(status),
+        statusKey: statusKeyFor(status),
         messages: details.messages,
         lastMessage: details.latestMessage,
       });

@@ -12,8 +12,9 @@ import type {
   PriorityCode,
   StatusCode,
   Ticket,
+  TicketStatusKey,
 } from "../models/Ticket.js";
-import { priorityCodeFor, statusCodeFor } from "../utils/ticketMappings.js";
+import { priorityCodeFor, statusCodeFor , statusKeyFor} from "../utils/ticketMappings.js";
 import { normalizeText } from "../utils/text.js";
 
 export interface PersistedTicket {
@@ -23,6 +24,7 @@ export interface PersistedTicket {
   readonly title: string;
   readonly priorityCode: PriorityCode;
   readonly statusCode: StatusCode;
+  readonly statusKey: TicketStatusKey;
   readonly creator: string;
   readonly assignee: string | null;
   readonly createdAt: string;
@@ -40,6 +42,7 @@ interface TicketRow {
   title: string;
   priority_code: PriorityCode;
   status_code: StatusCode;
+  status_key: TicketStatusKey;
   creator: string;
   assignee: string | null;
   created_at: string;
@@ -109,6 +112,7 @@ export class TicketRepository {
     const centerId = this.requireCenterId(ticket);
     const priorityCode = this.requirePriorityCode(ticket);
     const statusCode = this.requireStatusCode(ticket);
+    const statusKey = ticket.statusKey ?? statusKeyFor(ticket.status);
 
     const result = this.database
       .prepare(`
@@ -118,6 +122,7 @@ export class TicketRepository {
           title,
           priority_code,
           status_code,
+          status_key,
           creator,
           assignee,
           created_at,
@@ -130,6 +135,7 @@ export class TicketRepository {
           @title,
           @priorityCode,
           @statusCode,
+          @statusKey,
           @creator,
           @assignee,
           @createdAt,
@@ -143,6 +149,7 @@ export class TicketRepository {
         title: ticket.title,
         priorityCode,
         statusCode,
+        statusKey,
         creator: ticket.creator,
         assignee: ticket.assignee,
         createdAt: ticket.createdAt,
@@ -185,6 +192,7 @@ export class TicketRepository {
     const centerId = this.requireCenterId(ticket);
     const priorityCode = this.requirePriorityCode(ticket);
     const statusCode = this.requireStatusCode(ticket);
+    const statusKey = ticket.statusKey ?? statusKeyFor(ticket.status);
 
     const result = this.database
       .prepare(`
@@ -194,6 +202,7 @@ export class TicketRepository {
           title = @title,
           priority_code = @priorityCode,
           status_code = @statusCode,
+          status_key= @statusKey,
           creator = @creator,
           assignee = @assignee,
           created_at = @createdAt,
@@ -207,6 +216,7 @@ export class TicketRepository {
         title: ticket.title,
         priorityCode,
         statusCode,
+        statusKey,
         creator: ticket.creator,
         assignee: ticket.assignee,
         createdAt: ticket.createdAt,
@@ -358,6 +368,35 @@ export class TicketRepository {
     return this.requireById(ticketId);
   }
 
+    private ensureSchemaUpdates(): void {
+    if (!this.hasColumn("tickets", "status_key")) {
+      this.database.exec(`
+        ALTER TABLE tickets
+        ADD COLUMN status_key TEXT NOT NULL DEFAULT 'open'
+        CHECK (
+          status_key IN (
+            'open',
+            'in_review',
+            'creator_reply',
+            'answered',
+            'closed'
+          )
+        );
+      `);
+    }
+
+    this.database.exec(`
+      UPDATE tickets
+      SET status_key = CASE status_code
+        WHEN 2 THEN 'creator_reply'
+        WHEN 1 THEN 'answered'
+        WHEN 3 THEN 'closed'
+        ELSE 'open'
+      END
+      WHERE status_key = 'open';
+    `);
+  }
+
   private migrate(): void {
     const ticketsExist = this.tableExists("tickets");
 
@@ -390,6 +429,7 @@ export class TicketRepository {
 
     this.createSchema();
     this.seedCenters();
+    this.ensureSchemaUpdates();
   }
 
   private createSchema(): void {
@@ -411,6 +451,16 @@ export class TicketRepository {
           CHECK (priority_code IN ('C', 'H', 'L', 'N')),
         status_code INTEGER NOT NULL
           CHECK (status_code IN (0, 1, 2, 3)),
+        status_key TEXT NOT NULL
+          CHECK (
+            status_key IN (
+              'open',
+              'in_review',
+              'creator_reply',
+              'answered',
+              'closed'
+            )
+          ),  
         creator TEXT NOT NULL,
         assignee TEXT,
         created_at TEXT NOT NULL,
@@ -524,6 +574,7 @@ export class TicketRepository {
         title,
         priority_code,
         status_code,
+        status_key,
         creator,
         assignee,
         created_at,
@@ -539,6 +590,7 @@ export class TicketRepository {
         @title,
         @priorityCode,
         @statusCode,
+        @statusKey,
         @creator,
         @assignee,
         @createdAt,
@@ -564,6 +616,7 @@ export class TicketRepository {
 
       const priorityCode = priorityCodeFor(row.priority);
       const statusCode = statusCodeFor(row.status);
+      const statusKey = statusKeyFor(row.status);
 
       insertTicket.run({
         ticketId: row.ticket_id,
@@ -571,6 +624,7 @@ export class TicketRepository {
         title: row.title,
         priorityCode,
         statusCode,
+        statusKey,
         creator: row.creator,
         assignee: row.assignee?.trim() || null,
         createdAt: row.created_at,
@@ -726,6 +780,7 @@ export class TicketRepository {
       title: row.title,
       priorityCode: row.priority_code,
       statusCode: row.status_code,
+      statusKey: row.status_key,
       creator: row.creator,
       assignee: row.assignee,
       createdAt: row.created_at,

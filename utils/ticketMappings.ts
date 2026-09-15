@@ -1,5 +1,6 @@
 import type { PriorityCode, StatusCode } from "../models/Ticket.js";
 import { normalizeText } from "./text.js";
+import type { TicketStatusKey } from "../models/Ticket.js";
 
 function normalizePersian(value: string): string {
   return normalizeText(value)
@@ -30,6 +31,33 @@ export function statusCodeFor(value: string): StatusCode {
   return code;
 }
 
+export function statusKeyFor(value: string): TicketStatusKey {
+  const normalized = value
+    .replace(/\u200c/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  switch (normalized) {
+    case "باز":
+      return "open";
+
+    case "در حال بررسی":
+      return "in_review";
+
+    case "پاسخ ایجاد کننده تیکت":
+      return "creator_reply";
+
+    case "پاسخ داده شده":
+      return "answered";
+
+    case "بسته شده":
+      return "closed";
+
+    default:
+      throw new Error(`Unknown ticket status: ${value}`);
+  }
+}
+
 export function priorityCodeFor(value: string): PriorityCode {
   const normalized = normalizePersian(value);
   const mappings: Readonly<Record<string, PriorityCode>> = {
@@ -45,3 +73,4 @@ export function priorityCodeFor(value: string): PriorityCode {
   }
   return code;
 }
+

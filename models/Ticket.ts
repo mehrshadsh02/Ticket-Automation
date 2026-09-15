@@ -2,6 +2,12 @@ import type { TicketMessage } from "./TicketMessage.js";
 
 export type PriorityCode = "C" | "H" | "L" | "N";
 export type StatusCode = 0 | 1 | 2 | 3;
+export type TicketStatusKey =
+  | "open"
+  | "in_review"
+  | "creator_reply"
+  | "answered"
+  | "closed";
 
 export interface Ticket {
   readonly id: string;
@@ -15,6 +21,7 @@ export interface Ticket {
   readonly assignee: string | null;
   readonly status: string;
   readonly statusCode?: StatusCode;
+  readonly statusKey?: TicketStatusKey;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly url: string;
