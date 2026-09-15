@@ -81,19 +81,21 @@ export class TicketCollector {
       const status =
         details.status || ticket.status;
 
-      collected.push({
-        ...ticket,
-        centerId: center.id,
-        title: details.title || ticket.title,
-        status,
-        priorityCode:
-          ticket.priorityCode ??
-          priorityCodeFor(ticket.priority),
-        statusCode: statusCodeFor(status),
-        statusKey: statusKeyFor(status),
-        messages: details.messages,
-        lastMessage: details.latestMessage,
-      });
+        collected.push({
+          ...ticket,
+          title: details.title || ticket.title,
+          status: details.status || ticket.status,
+          priorityCode:
+            ticket.priorityCode ?? priorityCodeFor(ticket.priority),
+          statusCode:
+            ticket.statusCode ??
+            statusCodeFor(details.status || ticket.status),
+          statusKey:
+            ticket.statusKey ??
+            statusKeyFor(details.status || ticket.status),
+          messages: details.messages,
+          lastMessage: details.latestMessage,
+        });
     }
 
     return collected;
