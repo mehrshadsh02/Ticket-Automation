@@ -11,6 +11,8 @@ import type {
   TodoService,
   TodoTaskMapping,
 } from "./TodoService.js";
+import type { TicketStatusKey } from "../models/Ticket.js";
+import { statusKeyFor } from "../utils/ticketMappings.js";
 
 export type ProcessingOutcome =
   | "created"
@@ -51,6 +53,16 @@ async process(ticket: Ticket): Promise<ProcessingResult> {
     previous.statusCode,
     this.requireStatusCode(ticket),
   );
+  const previousStatusKey = previous.statusKey;
+  const currentStatusKey =
+    ticket.statusKey ?? statusKeyFor(ticket.status);
+
+  await this.syncStatusTask(
+    ticket,
+    previousStatusKey,
+    currentStatusKey,
+  );
+  
 
   let activeMapping = mapping;
 
@@ -81,6 +93,7 @@ async process(ticket: Ticket): Promise<ProcessingResult> {
       ticket,
       transition,
     );
+    
   }
 
   this.repository.updateTicket(ticket);
@@ -93,6 +106,122 @@ async process(ticket: Ticket): Promise<ProcessingResult> {
       this.now(),
     ),
   };
+}
+
+// private async deleteStatusTask(
+//   ticketId: string,
+//   statusKey: "open" | "in_review" | "creator_reply",
+// ): Promise<void> {
+//   const listId =
+//     await this.todoService.getOrCreateStatusList(statusKey);
+
+//   const mapping = await this.todoService.createStatusTask(
+//     {
+//       id: ticketId,
+//       title: "",
+//       priority: "",
+//       organization: "",
+//       center: "",
+//       creator: "",
+//       assignee: null,
+//       status: "",
+//       createdAt: "",
+//       updatedAt: "",
+//       url: "",
+//       statusKey,
+//     },
+//     statusKey,
+//   );
+
+//   await this.todoService.deleteStatusTask(mapping);
+// }
+
+// private async syncStatusTask(
+//   ticket: Ticket,
+//   previousStatusKey: TicketStatusKey,
+//   currentStatusKey: TicketStatusKey,
+// ): Promise<void> {
+//   const activeStatuses = [
+//     "open",
+//     "in_review",
+//     "creator_reply",
+//   ] as const;
+
+//   const previousActive =
+//     activeStatuses.includes(
+//       previousStatusKey as (typeof activeStatuses)[number],
+//     )
+//       ? (previousStatusKey as (typeof activeStatuses)[number])
+//       : null;
+
+//   const currentActive =
+//     activeStatuses.includes(
+//       currentStatusKey as (typeof activeStatuses)[number],
+//     )
+//       ? (currentStatusKey as (typeof activeStatuses)[number])
+//       : null;
+
+//   if (
+//     previousActive &&
+//     previousActive !== currentActive
+//   ) {
+//     await this.todoService.deleteStatusTask(
+//       await this.todoService.createStatusTask(
+//         ticket,
+//         previousActive,
+//       ),
+//     );
+//   }
+
+//   if (currentActive) {
+//     await this.todoService.createStatusTask(
+//       ticket,
+//       currentActive,
+//     );
+//   }
+// }
+
+private async syncStatusTask(
+  ticket: Ticket,
+  previousStatusKey: TicketStatusKey,
+  currentStatusKey: TicketStatusKey,
+): Promise<void> {
+  const activeStatuses = [
+    "open",
+    "in_review",
+    "creator_reply",
+  ] as const;
+
+  const previousActive =
+    activeStatuses.includes(
+      previousStatusKey as (typeof activeStatuses)[number],
+    )
+      ? (previousStatusKey as (typeof activeStatuses)[number])
+      : null;
+
+  const currentActive =
+    activeStatuses.includes(
+      currentStatusKey as (typeof activeStatuses)[number],
+    )
+      ? (currentStatusKey as (typeof activeStatuses)[number])
+      : null;
+
+  if (
+    previousActive &&
+    previousActive !== currentActive
+  ) {
+    await this.todoService.deleteStatusTaskByStatus(
+      ticket.id,
+      previousActive,
+    );
+  }
+
+  if (currentActive) {
+    await this.todoService.createStatusTask(
+      ticket,
+      currentActive,
+    );
+  }
 }
 
 private async applyTodoChange(

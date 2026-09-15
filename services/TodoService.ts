@@ -20,4 +20,26 @@ export interface TodoService {
   updateTask(mapping: TodoTaskMapping, ticket: Ticket): Promise<void>;
   completeTask(mapping: TodoTaskMapping, ticket: Ticket): Promise<void>;
   reopenTask(mapping: TodoTaskMapping, ticket: Ticket): Promise<void>;
+  getOrCreateStatusList(
+    statusKey: "open" | "in_review" | "creator_reply",
+  ): Promise<string>;
+
+  createStatusTask(
+    ticket: Ticket,
+    statusKey: "open" | "in_review" | "creator_reply",
+  ): Promise<TodoTaskMapping>;
+
+  updateStatusTask(
+    mapping: TodoTaskMapping,
+    ticket: Ticket,
+  ): Promise<void>;
+
+  // deleteStatusTask(
+  //   mapping: TodoTaskMapping,
+  // ): Promise<void>;
+
+  deleteStatusTaskByStatus(
+    ticketId: string,
+    statusKey: "open" | "in_review" | "creator_reply",
+  ): Promise<void>;
 }

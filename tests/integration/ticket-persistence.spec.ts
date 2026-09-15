@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from "node:fs/promises";
+
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -51,12 +52,43 @@ class FakeTodoService implements TodoService {
     this.calls.push(`reopen:${mapping.taskId}`);
     return Promise.resolve();
   }
+  
+  async getOrCreateStatusList(
+    _statusKey: "open" | "in_review" | "creator_reply",
+  ): Promise<string> {
+    return "fake-status-list";
+  }
+
+  async createStatusTask(
+    _ticket: Ticket,
+    _statusKey: "open" | "in_review" | "creator_reply",
+  ): Promise<TodoTaskMapping> {
+    return {
+      taskId: "fake-status-task",
+      listId: "fake-status-list",
+    };
+  }
+
+  async updateStatusTask(
+    _mapping: TodoTaskMapping,
+    _ticket: Ticket,
+  ): Promise<void> {}
+
+  async deleteStatusTask(
+    _mapping: TodoTaskMapping,
+  ): Promise<void> {}
+
+  async deleteStatusTaskByStatus(
+  _ticketId: string,
+  _statusKey: "open" | "in_review" | "creator_reply",
+): Promise<void> {}
 }
 
 class FailingTodoService extends FakeTodoService {
   override updateTask(): Promise<void> {
     return Promise.reject(new Error("temporary adapter failure"));
   }
+  
 }
 
 let directory: string;

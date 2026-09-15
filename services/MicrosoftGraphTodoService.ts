@@ -39,6 +39,11 @@ export class MicrosoftGraphTodoService implements TodoService {
   private readonly graphBaseUrl: string;
 
   private readonly listIds = new Map<string, string>();
+  private readonly statusListIds = new Map<string, string>();
+  private readonly statusListPromises = new Map<
+    string,
+    Promise<string>
+  >();
   private readonly listPromises = new Map<string, Promise<string>>();
 
   constructor(
@@ -76,6 +81,36 @@ export class MicrosoftGraphTodoService implements TodoService {
       return listId;
     } finally {
       this.listPromises.delete(key);
+    }
+  }
+
+  async getOrCreateStatusList(
+    statusKey: "open" | "in_review" | "creator_reply",
+  ): Promise<string> {
+    const cached = this.statusListIds.get(statusKey);
+
+    if (cached) {
+      return cached;
+    }
+
+    const pending = this.statusListPromises.get(statusKey);
+
+    if (pending) {
+      return pending;
+    }
+
+    const promise = this.findOrCreateList(
+      this.statusListName(statusKey),
+    );
+
+    this.statusListPromises.set(statusKey, promise);
+
+    try {
+      const listId = await promise;
+      this.statusListIds.set(statusKey, listId);
+      return listId;
+    } finally {
+      this.statusListPromises.delete(statusKey);
     }
   }
 
@@ -143,6 +178,113 @@ export class MicrosoftGraphTodoService implements TodoService {
     );
   }
 
+  async createStatusTask(
+    ticket: Ticket,
+    statusKey: "open" | "in_review" | "creator_reply",
+  ): Promise<TodoTaskMapping> {
+    const listId = await this.getOrCreateStatusList(statusKey);
+
+    const existing = await this.findTaskByExternalId(
+      listId,
+      ticket.id,
+    );
+
+    if (existing) {
+      await this.updateStatusTask(
+        {
+          taskId: existing.id,
+          listId,
+        },
+        ticket,
+      );
+
+      return {
+        taskId: existing.id,
+        listId,
+      };
+    }
+
+    const task = await this.request<GraphTodoTask>(
+      `/me/todo/lists/${encodeURIComponent(listId)}/tasks`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ...this.taskFields(ticket),
+          linkedResources: [
+            {
+              webUrl: ticket.url,
+              applicationName: "Helpical",
+              displayName: `Helpical ticket ${ticket.id}`,
+              externalId: ticket.id,
+            },
+          ],
+        }),
+      },
+      201,
+    );
+
+    return {
+      taskId: task.id,
+      listId,
+    };
+  }
+
+  async updateStatusTask(
+    mapping: TodoTaskMapping,
+    ticket: Ticket,
+  ): Promise<void> {
+    await this.patchTask(
+      mapping,
+      this.taskFields(ticket),
+    );
+  }
+
+  // async deleteStatusTask(
+  //   mapping: TodoTaskMapping,
+  // ): Promise<void> {
+  //   await this.request<void>(
+  //     `/me/todo/lists/${encodeURIComponent(mapping.listId)}` +
+  //       `/tasks/${encodeURIComponent(mapping.taskId)}`,
+  //     {
+  //       method: "DELETE",
+  //     },
+  //     204,
+  //   );
+  // }
+
+  async deleteStatusTaskByStatus(
+    ticketId: string,
+    statusKey: "open" | "in_review" | "creator_reply",
+  ): Promise<void> {
+    const listId =
+      await this.getOrCreateStatusList(statusKey);
+
+    const existing =
+      await this.findTaskByExternalId(
+        listId,
+        ticketId,
+      );
+
+    if (!existing) {
+      return;
+    }
+
+    try {
+      await this.request<void>(
+        `/me/todo/lists/${encodeURIComponent(listId)}` +
+          `/tasks/${encodeURIComponent(existing.id)}`,
+        {
+          method: "DELETE",
+        },
+        204,
+      );
+    } catch (error) {
+      if (!String(error).includes("404 Not Found")) {
+        throw error;
+      }
+    }
+  }
+
   async completeTask(
     mapping: TodoTaskMapping,
     ticket: Ticket,
@@ -161,6 +303,21 @@ export class MicrosoftGraphTodoService implements TodoService {
       ...this.taskFields(ticket),
       status: "notStarted",
     });
+  }
+
+  private statusListName(
+    statusKey: "open" | "in_review" | "creator_reply",
+  ): string {
+    switch (statusKey) {
+      case "open":
+        return "تیکت های باز";
+
+      case "in_review":
+        return "تیکت های در حال بررسی";
+
+      case "creator_reply":
+        return "تیکت های پاسخ ایجاد کننده تیکت";
+    }
   }
 
   private listNameFor(centerId?: string): string {
