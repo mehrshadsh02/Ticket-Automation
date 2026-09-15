@@ -10,6 +10,7 @@ import { centers } from '../config/centers.js';
 import { createTodoService } from './createTodoService.js';
 import { createLogger } from '../utils/logger.js';
 import fs from 'node:fs';
+import path from 'node:path';
 
 export async function runSync(config: AppConfig): Promise<void> {
   const logger = createLogger(config.LOG_LEVEL);
@@ -17,10 +18,28 @@ export async function runSync(config: AppConfig): Promise<void> {
   const lock = `${config.DATABASE_PATH}.lock`;
 
   try {
-    fs.mkdirSync(lock, { recursive: false });
-  } catch {
-    logger.warn({ event: 'sync_skipped_locked' });
-    return;
+  // بررسی Stale Lock (قفل مرده)
+  if (fs.existsSync(lock)) {
+    const pidFile = path.join(lock, 'pid');
+    if (fs.existsSync(pidFile)) {
+      const pid = Number(fs.readFileSync(pidFile, 'utf-8'));
+      try {
+        process.kill(pid, 0); // اگر پروسه زنده است، exception نمی‌دهد
+        logger.warn({ event: 'sync_skipped_locked' });
+        return;
+      } catch {
+        console.warn('Removing stale lock (previous process crashed)');
+        fs.rmSync(lock, { recursive: true, force: true });
+      }
+    }
+  }
+  fs.mkdirSync(lock, { recursive: false });
+  fs.writeFileSync(path.join(lock, 'pid'), String(process.pid));
+  // ...
+  } finally {
+    try {
+      fs.rmSync(lock, { recursive: true, force: true });
+    } catch { /* best-effort */ }
   }
 
   const repo = new TicketRepository(config.DATABASE_PATH);
