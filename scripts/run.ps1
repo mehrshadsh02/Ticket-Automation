@@ -1,3 +1,17 @@
 $ErrorActionPreference = 'Stop'
+
 Set-Location (Split-Path -Parent $PSScriptRoot)
-if (-not (Get-Process -Name node -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*Ticket-Automation*' })) { npm run sync }
+
+$projectPath = (Get-Location).Path
+
+$running = Get-Process -Name node -ErrorAction SilentlyContinue |
+    Where-Object {
+        $_.Path -like "$projectPath*"
+    }
+
+if ($running) {
+    Write-Host "Ticket-Automation sync is already running."
+    exit 0
+}
+
+npm run sync
